@@ -24,7 +24,7 @@ type Pos {
 }
 
 type Board {
-  Board(food: List(Pos))
+  Board(food: List(Pos), snek: List(Pos))
 }
 
 type Model {
@@ -44,7 +44,16 @@ fn init(_flags) -> Model {
       warning: colour.yellow(),
       info: colour.blue(),
     )
-  Model(0, theme, Board([Pos(0, 0), Pos(9, 9), Pos(3, 8)]))
+  Model(
+    0,
+    theme,
+    Board([Pos(0, 0), Pos(9, 9), Pos(3, 8)], [
+      Pos(0, 0),
+      Pos(0, 1),
+      Pos(1, 1),
+      Pos(1, 2),
+    ]),
+  )
 }
 
 type Msg {
@@ -120,11 +129,13 @@ fn line(x1, y1, x2, y2, width) {
 }
 
 fn grid(board: Board) {
-  let w = 400
-  let h = 400
-  let size = 40
+  let w = 500
+  let h = 500
+  let size = 50
   let half_size = size / 2
-  let food_radius = half_size - 4
+  let food_radius = half_size - 6
+  let grid_line_width = 4
+  let grid_border_width = grid_line_width * 2
   svg.svg(
     [
       attr("width", w),
@@ -133,34 +144,45 @@ fn grid(board: Board) {
       attr_str("version", "1.1"),
     ],
     [
+      // background
+      svg.rect([
+        attr("width", w),
+        attr("height", h),
+        attr("stroke-width", 0),
+        attr_str("fill", "#393939"),
+      ]),
       // borders
-      svg.g([attr_str("stroke", "grey")], [
-        line(0, 0, w, 0, 4),
-        line(0, 0, 0, h, 4),
-        line(0, h, w, h, 4),
-        line(w, 0, w, h, 4),
+      svg.g([attr_str("stroke", "#0f0b19")], [
+        line(0, 0, w, 0, grid_border_width),
+        line(0, 0, 0, h, grid_border_width),
+        line(0, h, w, h, grid_border_width),
+        line(w, 0, w, h, grid_border_width),
       ]),
       // vertical interior grid lines
       svg.g(
-        [attr_str("stroke", "grey")],
+        [attr_str("stroke", "#0f0b19")],
         list.range(1, { w / size } - 1)
           |> list.map(fn(a) {
             let x = a * size
-            line(x, 0, x, h, 2)
+            line(x, 0, x, h, grid_line_width)
           }),
       ),
       // horizontal interior grid lines
       svg.g(
-        [attr_str("stroke", "grey")],
+        [attr_str("stroke", "#0f0b19")],
         list.range(1, { h / size } - 1)
           |> list.map(fn(a) {
             let y = a * size
-            line(0, y, w, y, 2)
+            line(0, y, w, y, grid_line_width)
           }),
       ),
       // food
       svg.g(
-        [attr_str("fill", "red"), attr("stroke-width", 0)],
+        [
+          attr_str("fill", "#f43f5e"),
+          // attr_str("fill-opacity", "0.7"),
+          attr("stroke-width", 0),
+        ],
         board.food
           |> list.map(fn(pos) {
             svg.circle([
@@ -171,6 +193,32 @@ fn grid(board: Board) {
             ])
           }),
       ),
+      // snek
+      svg.g(
+        [
+          attr_str("stroke", "#03d3fc"),
+          attr("stroke-width", half_size),
+          attr_str("fill-opacity", "0"),
+        ],
+        [
+          svg.polyline([
+            attr_str("stroke-linecap", "square"),
+            // attr_str("stroke-linejoin", "round"),
+            // attr_str("points", "20,20 20,60 60,60"),
+            attr_str("points", snek_to_points(board.snek, size)),
+          ]),
+        ],
+      ),
     ],
   )
+}
+
+fn snek_to_points(snek: List(Pos), size: Int) -> String {
+  let half_size = size / 2
+  snek
+  |> list.map(fn(pos) {
+    Pos({ pos.x * size } + half_size, { pos.y * size } + half_size)
+  })
+  |> list.map(fn(pos) { int.to_string(pos.x) <> "," <> int.to_string(pos.y) })
+  |> list.fold("", fn(pos, acc) { acc <> " " <> pos })
 }

@@ -1,3 +1,4 @@
+import gleam/float
 import gleam/int
 import gleam/io
 import gleam/list
@@ -38,7 +39,7 @@ fn init(_flags) -> Model {
       space: Size(base: Rem(1.5), ratio: 1.618),
       text: Size(base: Rem(1.125), ratio: 1.215),
       radius: Px(4.0),
-      primary: colour.jade(),
+      primary: colour.slate_dark(),
       greyscale: colour.slate(),
       error: colour.red(),
       success: colour.green(),
@@ -49,7 +50,7 @@ fn init(_flags) -> Model {
     theme,
     Board(
       [Pos(0, 0), Pos(9, 9), Pos(3, 8)],
-      queue.from_list([Pos(0, 0), Pos(0, 1), Pos(1, 1), Pos(1, 2)]),
+      queue.from_list([Pos(6, 6), Pos(6, 6), Pos(6, 6)]),
     ),
   )
 }
@@ -160,14 +161,18 @@ fn line(x1, y1, x2, y2, width) {
   ])
 }
 
+fn int_fraction(n: Int, mult: Float) -> Int {
+  int.to_float(n) *. mult |> float.round
+}
+
 fn grid(board: Board) {
-  let w = 500
-  let h = 500
-  let size = 50
+  let w = 800
+  let h = 600
+  let size = 40
   let half_size = size / 2
-  let food_radius = half_size - 6
-  let grid_line_width = 4
-  let grid_border_width = grid_line_width * 2
+  let snek_width = int_fraction(size, 0.5)
+  let food_radius = int_fraction(half_size, 0.5)
+  let grid_line_width = 1
   svg.svg(
     [
       attr("width", w),
@@ -185,10 +190,10 @@ fn grid(board: Board) {
       ]),
       // borders
       svg.g([attr_str("stroke", "#0f0b19")], [
-        line(0, 0, w, 0, grid_border_width),
-        line(0, 0, 0, h, grid_border_width),
-        line(0, h, w, h, grid_border_width),
-        line(w, 0, w, h, grid_border_width),
+        line(0, 0, w, 0, grid_line_width * 2),
+        line(0, 0, 0, h, grid_line_width * 2),
+        line(0, h, w, h, grid_line_width * 2),
+        line(w, 0, w, h, grid_line_width * 2),
       ]),
       // vertical interior grid lines
       svg.g(
@@ -210,15 +215,10 @@ fn grid(board: Board) {
       ),
       // food
       svg.g(
-        [
-          attr_str("fill", "#f43f5e"),
-          // attr_str("fill-opacity", "0.7"),
-          attr("stroke-width", 0),
-        ],
+        [attr_str("fill", "#f43f5e"), attr("stroke-width", 0)],
         board.food
           |> list.map(fn(pos) {
             svg.circle([
-              //  <circle cx="50" cy="50" r="50" />
               attr("cx", { pos.x * size } + half_size),
               attr("cy", { pos.y * size } + half_size),
               attr("r", food_radius),
@@ -229,7 +229,7 @@ fn grid(board: Board) {
       svg.g(
         [
           attr_str("stroke", "#03d3fc"),
-          attr("stroke-width", half_size),
+          attr("stroke-width", snek_width),
           attr_str("fill-opacity", "0"),
         ],
         [

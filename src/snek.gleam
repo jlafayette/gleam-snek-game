@@ -1,6 +1,7 @@
 import gleam/int
 import gleam/io
 import gleam/list
+import gleam/queue.{type Queue}
 import lustre
 import lustre/attribute
 import lustre/element.{text}
@@ -24,11 +25,11 @@ type Pos {
 }
 
 type Board {
-  Board(food: List(Pos), snek: List(Pos))
+  Board(food: List(Pos), snek: Queue(Pos))
 }
 
 type Model {
-  Model(count: Int, theme: Theme, board: Board)
+  Model(theme: Theme, board: Board)
 }
 
 fn init(_flags) -> Model {
@@ -45,32 +46,62 @@ fn init(_flags) -> Model {
       info: colour.blue(),
     )
   Model(
-    0,
     theme,
-    Board([Pos(0, 0), Pos(9, 9), Pos(3, 8)], [
-      Pos(0, 0),
-      Pos(0, 1),
-      Pos(1, 1),
-      Pos(1, 2),
-    ]),
+    Board(
+      [Pos(0, 0), Pos(9, 9), Pos(3, 8)],
+      queue.from_list([Pos(0, 0), Pos(0, 1), Pos(1, 1), Pos(1, 2)]),
+    ),
   )
 }
 
+type Move {
+  Left
+  Right
+  Down
+  Up
+}
+
 type Msg {
-  Incr
-  Decr
+  Move(Move)
 }
 
 fn update(model: Model, msg: Msg) -> Model {
-  let count = case msg {
-    Incr -> model.count + 1
-    Decr -> model.count - 1
+  case msg {
+    Move(move) ->
+      Model(
+        ..model,
+        board: Board(..model.board, snek: move_snek(model.board.snek, move)),
+      )
   }
-  Model(..model, count: count)
+}
+
+fn move_snek(snek: Queue(Pos), move: Move) -> Queue(Pos) {
+  case queue.pop_front(snek) {
+    Ok(#(head, _)) -> {
+      let s = drop_last(snek)
+      queue.push_front(s, new_head(head, move))
+    }
+    Error(_) -> queue.new()
+  }
+}
+
+fn new_head(head: Pos, move: Move) -> Pos {
+  case move {
+    Left -> Pos(head.x - 1, head.y)
+    Right -> Pos(head.x + 1, head.y)
+    Down -> Pos(head.x, head.y + 1)
+    Up -> Pos(head.x, head.y - 1)
+  }
+}
+
+fn drop_last(snek: Queue(Pos)) -> Queue(Pos) {
+  case queue.pop_back(snek) {
+    Ok(#(_, q)) -> q
+    Error(_) -> queue.new()
+  }
 }
 
 fn view(model: Model) {
-  let count = int.to_string(model.count)
   html.div([], [
     styles.elements(),
     styles.theme(model.theme),
@@ -85,9 +116,10 @@ fn view(model: Model) {
     ui.centre(
       [],
       ui.cluster([], [
-        square_button(Decr, "-"),
-        ui.centre([], html.p([], [text(count)])),
-        square_button(Incr, "+"),
+        square_button(Move(Left), "Lf"),
+        square_button(Move(Right), "Rt"),
+        square_button(Move(Down), "Dn"),
+        square_button(Move(Up), "Up"),
       ]),
     ),
     ui.centre([], grid(model.board)),
@@ -213,9 +245,10 @@ fn grid(board: Board) {
   )
 }
 
-fn snek_to_points(snek: List(Pos), size: Int) -> String {
+fn snek_to_points(snek: Queue(Pos), size: Int) -> String {
   let half_size = size / 2
   snek
+  |> queue.to_list
   |> list.map(fn(pos) {
     Pos({ pos.x * size } + half_size, { pos.y * size } + half_size)
   })

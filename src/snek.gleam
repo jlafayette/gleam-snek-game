@@ -8,7 +8,7 @@ import lustre/attribute
 import lustre/element.{text}
 import lustre/element/html
 import lustre/element/svg
-import lustre/event.{on_click}
+import lustre/event
 import lustre/ui.{type Theme, Px, Rem, Size, Theme}
 import lustre/ui/button
 import lustre/ui/util/colour
@@ -30,10 +30,32 @@ type Board {
 }
 
 type Model {
-  Model(theme: Theme, board: Board)
+  Model(theme: Theme, board: Board, keydown: String)
+}
+
+pub type Event
+
+@external(javascript, "./snek_ffi.mjs", "eventCode")
+fn event_code(event: Event) -> String
+
+@external(javascript, "./snek_ffi.mjs", "eventKey")
+fn event_key(event: Event) -> String
+
+@external(javascript, "./snek_ffi.mjs", "documentAddEventListener")
+pub fn document_add_event_listener(
+  type_: String,
+  listener: fn(Event) -> Nil,
+) -> Nil
+
+fn on_keydown(event: Event) {
+  io.debug(event)
+  io.debug(event_code(event))
+  io.debug(event_key(event))
+  Nil
 }
 
 fn init(_flags) -> Model {
+  let _ = document_add_event_listener("keydown", on_keydown)
   let theme =
     Theme(
       space: Size(base: Rem(1.5), ratio: 1.618),
@@ -52,6 +74,7 @@ fn init(_flags) -> Model {
       [Pos(0, 0), Pos(9, 9), Pos(3, 8)],
       queue.from_list([Pos(6, 6), Pos(6, 6), Pos(6, 6)]),
     ),
+    "N/A",
   )
 }
 
@@ -64,6 +87,7 @@ type Move {
 
 type Msg {
   Move(Move)
+  Keydown(String)
 }
 
 fn update(model: Model, msg: Msg) -> Model {
@@ -73,6 +97,7 @@ fn update(model: Model, msg: Msg) -> Model {
         ..model,
         board: Board(..model.board, snek: move_snek(model.board.snek, move)),
       )
+    Keydown(str) -> Model(..model, keydown: str)
   }
 }
 
@@ -103,7 +128,7 @@ fn drop_last(snek: Queue(Pos)) -> Queue(Pos) {
 }
 
 fn view(model: Model) {
-  html.div([], [
+  html.div([event.on_keydown(Keydown)], [
     styles.elements(),
     styles.theme(model.theme),
     ui.centre(
@@ -117,6 +142,7 @@ fn view(model: Model) {
     ui.centre(
       [],
       ui.cluster([], [
+        html.p([], [text(model.keydown)]),
         square_button(Move(Left), "Lf"),
         square_button(Move(Right), "Rt"),
         square_button(Move(Down), "Dn"),
@@ -131,7 +157,7 @@ fn square_button(msg: Msg, txt: String) {
   let px_size = "40px"
   ui.button(
     [
-      on_click(msg),
+      event.on_click(msg),
       button.solid(),
       attribute.style([
         #("height", px_size),

@@ -5,6 +5,7 @@ import gleam/list
 import gleam/queue.{type Queue}
 import lustre
 import lustre/attribute
+import lustre/effect
 import lustre/element.{text}
 import lustre/element/html
 import lustre/element/svg
@@ -14,12 +15,33 @@ import lustre/ui/button
 import lustre/ui/util/colour
 import lustre/ui/util/styles
 
+// --- Main 
+
 pub fn main() {
   io.println("Hello from snek!")
-  let app = lustre.simple(init, update, view)
-  let assert Ok(_) = lustre.start(app, "#app", Nil)
+  let app = lustre.application(init, update, view)
+  let assert Ok(send_to_runtime) = lustre.start(app, "#app", Nil)
+  document_add_event_listener("keydown", fn(event) {
+    event_code(event)
+    |> io.debug
+    |> Keydown
+    |> lustre.dispatch
+    |> send_to_runtime
+  })
   Nil
 }
+
+// --- Keyboard Input
+
+pub type Event
+
+@external(javascript, "./snek_ffi.mjs", "eventCode")
+fn event_code(event: Event) -> String
+
+@external(javascript, "./snek_ffi.mjs", "documentAddEventListener")
+fn document_add_event_listener(type_: String, listener: fn(Event) -> Nil) -> Nil
+
+// --- Model
 
 type Pos {
   Pos(x: Int, y: Int)
@@ -33,29 +55,7 @@ type Model {
   Model(theme: Theme, board: Board, keydown: String)
 }
 
-pub type Event
-
-@external(javascript, "./snek_ffi.mjs", "eventCode")
-fn event_code(event: Event) -> String
-
-@external(javascript, "./snek_ffi.mjs", "eventKey")
-fn event_key(event: Event) -> String
-
-@external(javascript, "./snek_ffi.mjs", "documentAddEventListener")
-pub fn document_add_event_listener(
-  type_: String,
-  listener: fn(Event) -> Nil,
-) -> Nil
-
-fn on_keydown(event: Event) {
-  io.debug(event)
-  io.debug(event_code(event))
-  io.debug(event_key(event))
-  Nil
-}
-
-fn init(_flags) -> Model {
-  let _ = document_add_event_listener("keydown", on_keydown)
+fn init(_flags) -> #(Model, effect.Effect(Msg)) {
   let theme =
     Theme(
       space: Size(base: Rem(1.5), ratio: 1.618),
@@ -68,15 +68,20 @@ fn init(_flags) -> Model {
       warning: colour.yellow(),
       info: colour.blue(),
     )
-  Model(
-    theme,
-    Board(
-      [Pos(0, 0), Pos(9, 9), Pos(3, 8)],
-      queue.from_list([Pos(6, 6), Pos(6, 6), Pos(6, 6)]),
+  #(
+    Model(
+      theme,
+      Board(
+        [Pos(0, 0), Pos(9, 9), Pos(3, 8)],
+        queue.from_list([Pos(6, 6), Pos(6, 6), Pos(6, 6)]),
+      ),
+      "N/A",
     ),
-    "N/A",
+    effect.none(),
   )
 }
+
+// --- Update
 
 type Move {
   Left
@@ -90,14 +95,16 @@ type Msg {
   Keydown(String)
 }
 
-fn update(model: Model, msg: Msg) -> Model {
+fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    Move(move) ->
+    Move(move) -> #(
       Model(
         ..model,
         board: Board(..model.board, snek: move_snek(model.board.snek, move)),
-      )
-    Keydown(str) -> Model(..model, keydown: str)
+      ),
+      effect.none(),
+    )
+    Keydown(str) -> #(Model(..model, keydown: str), effect.none())
   }
 }
 
@@ -127,8 +134,10 @@ fn drop_last(snek: Queue(Pos)) -> Queue(Pos) {
   }
 }
 
+// --- View
+
 fn view(model: Model) {
-  html.div([event.on_keydown(Keydown)], [
+  html.div([], [
     styles.elements(),
     styles.theme(model.theme),
     ui.centre(

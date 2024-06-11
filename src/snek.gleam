@@ -41,6 +41,20 @@ fn event_code(event: Event) -> String
 @external(javascript, "./snek_ffi.mjs", "documentAddEventListener")
 fn document_add_event_listener(type_: String, listener: fn(Event) -> Nil) -> Nil
 
+// --- Tick for game update
+
+fn every(interval: Int, tick: msg) -> effect.Effect(msg) {
+  effect.from(fn(dispatch) {
+    window_set_interval(interval, fn() { dispatch(tick) })
+  })
+}
+
+@external(javascript, "./snek_ffi.mjs", "windowSetInterval")
+fn window_set_interval(interval: Int, cb: fn() -> Nil) -> Nil
+
+@external(javascript, "./snek_ffi.mjs", "windowClearInterval")
+fn window_clear_interval() -> Nil
+
 // --- Model
 
 type Pos {
@@ -58,11 +72,13 @@ type Model {
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
   let theme =
     Theme(
-      space: Size(base: Rem(1.5), ratio: 1.618),
+      // space: Size(base: Rem(1.5), ratio: 1.618),
+      space: Size(base: Rem(1.0), ratio: 1.0),
+      // text: Size(base: Rem(1.125), ratio: 1.215),
       text: Size(base: Rem(1.125), ratio: 1.215),
       radius: Px(4.0),
-      primary: colour.slate_dark(),
-      greyscale: colour.slate(),
+      primary: colour.blue(),
+      greyscale: colour.slate_dark(),
       error: colour.red(),
       success: colour.green(),
       warning: colour.yellow(),
@@ -77,7 +93,7 @@ fn init(_flags) -> #(Model, effect.Effect(Msg)) {
       ),
       "N/A",
     ),
-    effect.none(),
+    every(500, Tick),
   )
 }
 
@@ -91,13 +107,14 @@ type Move {
 }
 
 type Msg {
-  Move(Move)
   Keydown(String)
+  Tick
+  TickStart(Int)
+  TickStop
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    Move(mv) -> #(move(model, mv), effect.none())
     Keydown(str) -> {
       let model = case str {
         "KeyW" | "ArrowUp" -> move(model, Up)
@@ -107,6 +124,19 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         _ -> model
       }
       #(Model(..model, keydown: str), effect.none())
+    }
+    Tick -> {
+      io.debug("tick")
+      #(model, effect.none())
+    }
+    TickStart(ms) -> {
+      io.debug("tick-start")
+      #(model, every(ms, Tick))
+    }
+    TickStop -> {
+      io.debug("tick-stop")
+      let _ = window_clear_interval()
+      #(model, effect.none())
     }
   }
 }
@@ -154,22 +184,26 @@ fn view(model: Model) {
       [],
       ui.prose([], [
         ui.centre([], html.h1([], [text("Snek Game")])),
-        ui.centre([], html.h3([], [text("Use WASD or arrow keys to move")])),
+        ui.centre([], html.p([], [text("Use WASD or arrow keys to move")])),
         html.br([]),
       ]),
     ),
     ui.centre(
       [],
       ui.cluster([], [
+        button(TickStart(100), "100"),
+        button(TickStart(500), "500"),
+        button(TickStart(1000), "1000"),
+        button(TickStop, "Stop"),
         html.p([], [text(model.keydown)]),
-        // square_button(Move(Left), "Lf"),
-      // square_button(Move(Right), "Rt"),
-      // square_button(Move(Down), "Dn"),
-      // square_button(Move(Up), "Up"),
       ]),
     ),
     ui.centre([], grid(model.board)),
   ])
+}
+
+fn button(msg: Msg, txt: String) {
+  ui.button([event.on_click(msg), button.solid()], [text(txt)])
 }
 
 fn square_button(msg: Msg, txt: String) {

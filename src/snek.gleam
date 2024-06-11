@@ -97,29 +97,39 @@ type Msg {
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    Move(move) -> #(
-      Model(
-        ..model,
-        board: Board(..model.board, snek: move_snek(model.board.snek, move)),
-      ),
-      effect.none(),
-    )
-    Keydown(str) -> #(Model(..model, keydown: str), effect.none())
+    Move(mv) -> #(move(model, mv), effect.none())
+    Keydown(str) -> {
+      let model = case str {
+        "KeyW" | "ArrowUp" -> move(model, Up)
+        "KeyA" | "ArrowLeft" -> move(model, Left)
+        "KeyS" | "ArrowDown" -> move(model, Down)
+        "KeyD" | "ArrowRight" -> move(model, Right)
+        _ -> model
+      }
+      #(Model(..model, keydown: str), effect.none())
+    }
   }
 }
 
-fn move_snek(snek: Queue(Pos), move: Move) -> Queue(Pos) {
+fn move(model: Model, mv: Move) -> Model {
+  Model(
+    ..model,
+    board: Board(..model.board, snek: move_snek(model.board.snek, mv)),
+  )
+}
+
+fn move_snek(snek: Queue(Pos), mv: Move) -> Queue(Pos) {
   case queue.pop_front(snek) {
     Ok(#(head, _)) -> {
       let s = drop_last(snek)
-      queue.push_front(s, new_head(head, move))
+      queue.push_front(s, new_head(head, mv))
     }
     Error(_) -> queue.new()
   }
 }
 
-fn new_head(head: Pos, move: Move) -> Pos {
-  case move {
+fn new_head(head: Pos, mv: Move) -> Pos {
+  case mv {
     Left -> Pos(head.x - 1, head.y)
     Right -> Pos(head.x + 1, head.y)
     Down -> Pos(head.x, head.y + 1)
@@ -152,10 +162,10 @@ fn view(model: Model) {
       [],
       ui.cluster([], [
         html.p([], [text(model.keydown)]),
-        square_button(Move(Left), "Lf"),
-        square_button(Move(Right), "Rt"),
-        square_button(Move(Down), "Dn"),
-        square_button(Move(Up), "Up"),
+        // square_button(Move(Left), "Lf"),
+      // square_button(Move(Right), "Rt"),
+      // square_button(Move(Down), "Dn"),
+      // square_button(Move(Up), "Up"),
       ]),
     ),
     ui.centre([], grid(model.board)),

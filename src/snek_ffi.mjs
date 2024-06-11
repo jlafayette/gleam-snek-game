@@ -5,8 +5,3 @@ export function documentAddEventListener(type, listener) {
 export function eventCode(event) {
 	return event.code;
 }
-
-export function eventKey(event) {
-	return event.key;
-}
-

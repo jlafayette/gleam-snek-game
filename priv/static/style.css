@@ -1,0 +1,76 @@
+.micro-5-regular {
+	font-family: "Micro 5", sans-serif;
+	font-weight: 400;
+	font-style: normal;
+}
+
+.share-tech-mono-regular {
+	font-family: "Share Tech Mono", monospace;
+	font-weight: 400;
+	font-style: normal;
+}
+
+body {
+	display: flex;
+	height: 100vh;
+	margin: 0;
+}
+
+:root {
+	--menu-text: hsl(0, 0%, 92%);
+	--background: hsl(257, 39%, 7%);
+}
+
+.fullscreen {
+	background: var(--background);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	text-align: center;
+	min-height: 100vh;
+	min-width: 100vw;
+}
+
+.mask {
+	background-color: var(--background);
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	margin: 0;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.game-header {
+	font-family: "Micro 5", sans-serif;
+	font-weight: 400;
+	font-style: normal;
+	font-size: 120px;
+	text-wrap: nowrap;
+	color: var(--menu-text);
+	margin-bottom: 8px;
+	margin-top: 100px;
+}
+
+.sub-header {
+	color: var(--menu-text);
+	font-size: 16px;
+	margin-top: 8px;
+}
+
+.controls-header {
+	color: var(--menu-text);
+	font-size: 24px;
+	margin-bottom: 8px;
+}
+
+.controls-text {
+	color: var(--menu-text);
+	font-size: 16px;
+	margin-top: 8px;
+	margin-bottom: 8px;
+}

@@ -1,3 +1,4 @@
+import color
 import gleam/float
 import gleam/int
 import gleam/io
@@ -62,11 +63,16 @@ type Pos {
 }
 
 type Board {
-  Board(food: List(Pos), snek: Queue(Pos))
+  Board(food: List(Pos), snek: Queue(Pos), w: Int, h: Int, size: Int)
+}
+
+type GameState {
+  Menu
+  Play(Move)
 }
 
 type Model {
-  Model(theme: Theme, board: Board, keydown: String)
+  Model(theme: Theme, board: Board, state: GameState, keydown: String)
 }
 
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
@@ -90,7 +96,11 @@ fn init(_flags) -> #(Model, effect.Effect(Msg)) {
       Board(
         [Pos(0, 0), Pos(9, 9), Pos(3, 8)],
         queue.from_list([Pos(6, 6), Pos(6, 6), Pos(6, 6)]),
+        400,
+        600,
+        40,
       ),
+      Menu,
       "N/A",
     ),
     every(500, Tick),
@@ -114,20 +124,42 @@ type Msg {
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
+  case model.state {
+    Menu -> {
+      update_menu(model, msg)
+    }
+    Play(mv) -> {
+      update_play(model, msg, mv)
+    }
+  }
+}
+
+fn update_menu(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
+  case msg {
+    Keydown(str) if str == "Space" -> #(
+      Model(..model, state: Play(Up), keydown: str),
+      every(250, Tick),
+    )
+    Keydown(str) -> #(Model(..model, keydown: str), effect.none())
+    _ -> #(model, effect.none())
+  }
+}
+
+fn update_play(model: Model, msg: Msg, mv: Move) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) -> {
-      let model = case str {
-        "KeyW" | "ArrowUp" -> move(model, Up)
-        "KeyA" | "ArrowLeft" -> move(model, Left)
-        "KeyS" | "ArrowDown" -> move(model, Down)
-        "KeyD" | "ArrowRight" -> move(model, Right)
-        _ -> model
+      let mv = case str {
+        "KeyW" | "ArrowUp" -> Up
+        "KeyA" | "ArrowLeft" -> Left
+        "KeyS" | "ArrowDown" -> Down
+        "KeyD" | "ArrowRight" -> Right
+        _ -> mv
       }
-      #(Model(..model, keydown: str), effect.none())
+      #(Model(..model, keydown: str, state: Play(mv)), effect.none())
     }
     Tick -> {
       io.debug("tick")
-      #(model, effect.none())
+      #(move(model, mv), effect.none())
     }
     TickStart(ms) -> {
       io.debug("tick-start")
@@ -175,19 +207,62 @@ fn drop_last(snek: Queue(Pos)) -> Queue(Pos) {
 }
 
 // --- View
+const class = attribute.class
+
+fn menu_font_class() {
+  class("share-tech-mono-regular")
+}
 
 fn view(model: Model) {
+  html.div([class("fullscreen")], [
+    // ui.button([event.on_click(TickStop), button.solid()], [text("Stop")]),
+    case model.state {
+      Menu -> {
+        html.div([class("mask")], [
+          html.h1([class("game-header")], [text("Snek Game")]),
+          html.p([class("sub-header"), menu_font_class()], [
+            text("Press 'SPACE' to start"),
+          ]),
+          html.h3([class("controls-header"), menu_font_class()], [
+            text("Controls"),
+          ]),
+          html.p([class("controls-text"), menu_font_class()], [
+            text("Use WASD or arrow keys to move"),
+          ]),
+        ])
+      }
+      Play(_) -> grid(model.board)
+    },
+  ])
+}
+
+fn view2(model: Model) {
+  // let style = [#("width", "100vw"), #("height", "100vw")]
+  // html.div([attribute.style(style)], [
   html.div([], [
-    styles.elements(),
-    styles.theme(model.theme),
+    // styles.elements(),
+    // styles.theme(model.theme),
     ui.centre(
       [],
-      ui.prose([], [
-        ui.centre([], html.h1([], [text("Snek Game")])),
-        ui.centre([], html.p([], [text("Use WASD or arrow keys to move")])),
-        html.br([]),
-      ]),
+      ui.prose([], case model.state {
+        Menu -> {
+          [
+            ui.centre([], html.h1([], [text("Snek Game (Menu)")])),
+            ui.centre([], html.p([], [text("Press any key to start...")])),
+            ui.centre([], html.p([], [text("Use WASD or arrow keys to move")])),
+            html.br([]),
+          ]
+        }
+        Play(_) -> {
+          [ui.centre([], html.h1([], [text("Snek Game (Play)")])), html.br([])]
+        }
+      }),
     ),
+    ui.centre([], html.p([], [text(model.keydown)])),
+    // html.div([center_screen_style()], [grid(model.board)]),
+    // ui.centre([center_screen_style()], grid(model.board)),
+    ui.centre([], grid(model.board)),
+    html.br([]),
     ui.centre(
       [],
       ui.cluster([], [
@@ -195,10 +270,8 @@ fn view(model: Model) {
         button(TickStart(500), "500"),
         button(TickStart(1000), "1000"),
         button(TickStop, "Stop"),
-        html.p([], [text(model.keydown)]),
       ]),
     ),
-    ui.centre([], grid(model.board)),
   ])
 }
 
@@ -245,9 +318,9 @@ fn int_fraction(n: Int, mult: Float) -> Int {
 }
 
 fn grid(board: Board) {
-  let w = 800
-  let h = 600
-  let size = 40
+  let w = board.w
+  let h = board.h
+  let size = board.size
   let half_size = size / 2
   let snek_width = int_fraction(size, 0.5)
   let food_radius = int_fraction(half_size, 0.5)
@@ -265,10 +338,10 @@ fn grid(board: Board) {
         attr("width", w),
         attr("height", h),
         attr("stroke-width", 0),
-        attr_str("fill", "#393939"),
+        attr_str("fill", color.grid_background()),
       ]),
       // borders
-      svg.g([attr_str("stroke", "#0f0b19")], [
+      svg.g([attr_str("stroke", color.grid_border())], [
         line(0, 0, w, 0, grid_line_width * 2),
         line(0, 0, 0, h, grid_line_width * 2),
         line(0, h, w, h, grid_line_width * 2),
@@ -276,7 +349,7 @@ fn grid(board: Board) {
       ]),
       // vertical interior grid lines
       svg.g(
-        [attr_str("stroke", "#0f0b19")],
+        [attr_str("stroke", color.grid_lines())],
         list.range(1, { w / size } - 1)
           |> list.map(fn(a) {
             let x = a * size
@@ -285,7 +358,7 @@ fn grid(board: Board) {
       ),
       // horizontal interior grid lines
       svg.g(
-        [attr_str("stroke", "#0f0b19")],
+        [attr_str("stroke", color.grid_lines())],
         list.range(1, { h / size } - 1)
           |> list.map(fn(a) {
             let y = a * size
@@ -294,7 +367,7 @@ fn grid(board: Board) {
       ),
       // food
       svg.g(
-        [attr_str("fill", "#f43f5e"), attr("stroke-width", 0)],
+        [attr_str("fill", color.food()), attr("stroke-width", 0)],
         board.food
           |> list.map(fn(pos) {
             svg.circle([
@@ -307,7 +380,7 @@ fn grid(board: Board) {
       // snek
       svg.g(
         [
-          attr_str("stroke", "#03d3fc"),
+          attr_str("stroke", color.snek()),
           attr("stroke-width", snek_width),
           attr_str("fill-opacity", "0"),
         ],

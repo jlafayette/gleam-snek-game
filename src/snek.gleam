@@ -10,11 +10,6 @@ import lustre/effect
 import lustre/element.{text}
 import lustre/element/html
 import lustre/element/svg
-import lustre/event
-import lustre/ui.{type Theme, Px, Rem, Size, Theme}
-import lustre/ui/button
-import lustre/ui/util/colour
-import lustre/ui/util/styles
 
 // --- Main 
 
@@ -72,27 +67,12 @@ type GameState {
 }
 
 type Model {
-  Model(theme: Theme, board: Board, state: GameState, keydown: String)
+  Model(board: Board, state: GameState, keydown: String)
 }
 
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
-  let theme =
-    Theme(
-      // space: Size(base: Rem(1.5), ratio: 1.618),
-      space: Size(base: Rem(1.0), ratio: 1.0),
-      // text: Size(base: Rem(1.125), ratio: 1.215),
-      text: Size(base: Rem(1.125), ratio: 1.215),
-      radius: Px(4.0),
-      primary: colour.blue(),
-      greyscale: colour.slate_dark(),
-      error: colour.red(),
-      success: colour.green(),
-      warning: colour.yellow(),
-      info: colour.blue(),
-    )
   #(
     Model(
-      theme,
       Board(
         [Pos(0, 0), Pos(9, 9), Pos(3, 8)],
         queue.from_list([Pos(6, 6), Pos(6, 6), Pos(6, 6)]),
@@ -236,65 +216,8 @@ fn view(model: Model) {
   ])
 }
 
-fn view2(model: Model) {
-  // let style = [#("width", "100vw"), #("height", "100vw")]
-  // html.div([attribute.style(style)], [
-  html.div([], [
-    // styles.elements(),
-    // styles.theme(model.theme),
-    ui.centre(
-      [],
-      ui.prose([], case model.state {
-        Menu -> {
-          [
-            ui.centre([], html.h1([], [text("Snek Game (Menu)")])),
-            ui.centre([], html.p([], [text("Press any key to start...")])),
-            ui.centre([], html.p([], [text("Use WASD or arrow keys to move")])),
-            html.br([]),
-          ]
-        }
-        Play(_) -> {
-          [ui.centre([], html.h1([], [text("Snek Game (Play)")])), html.br([])]
-        }
-      }),
-    ),
-    ui.centre([], html.p([], [text(model.keydown)])),
-    // html.div([center_screen_style()], [grid(model.board)]),
-    // ui.centre([center_screen_style()], grid(model.board)),
-    ui.centre([], grid(model.board)),
-    html.br([]),
-    ui.centre(
-      [],
-      ui.cluster([], [
-        button(TickStart(100), "100"),
-        button(TickStart(500), "500"),
-        button(TickStart(1000), "1000"),
-        button(TickStop, "Stop"),
-      ]),
-    ),
-  ])
-}
-
 fn button(msg: Msg, txt: String) {
   ui.button([event.on_click(msg), button.solid()], [text(txt)])
-}
-
-fn square_button(msg: Msg, txt: String) {
-  let px_size = "40px"
-  ui.button(
-    [
-      event.on_click(msg),
-      button.solid(),
-      attribute.style([
-        #("height", px_size),
-        #("width", px_size),
-        #("text-align", "center"),
-        #("padding", "0px"),
-        #("line-height", "0px"),
-      ]),
-    ],
-    [text(txt)],
-  )
 }
 
 const attr_str = attribute.attribute

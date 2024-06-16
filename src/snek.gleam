@@ -74,15 +74,15 @@ type GameState {
 }
 
 type Model {
-  Model(board: Board, state: GameState, keydown: String)
+  Model(board: Board, tick_speed: Int, state: GameState, keydown: String)
 }
 
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
-  #(Model(init_board(), Menu, "N/A"), every(500, Tick))
+  #(Model(init_board(), 250, Menu, "N/A"), effect.none())
 }
 
 fn init_board() -> Board {
-  let width = 10
+  let width = 20
   let height = 15
   let tile_size = 40
   let snek_init_pos = Pos(5, 8)
@@ -144,7 +144,7 @@ fn update_menu(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) if str == "Space" -> #(
       Model(..model, state: Play(Up), keydown: str),
-      every(250, Tick),
+      every(model.tick_speed, Tick),
     )
     Keydown(str) -> #(Model(..model, keydown: str), effect.none())
     _ -> #(model, effect.none())
@@ -192,7 +192,10 @@ fn update_pause(
     Keydown(str) -> {
       case str {
         "Escape" | "Space" -> {
-          #(Model(..model, keydown: str, state: Play(mv)), every(250, Tick))
+          #(
+            Model(..model, keydown: str, state: Play(mv)),
+            every(model.tick_speed, Tick),
+          )
         }
         _ -> #(Model(..model, keydown: str), effect.none())
       }
@@ -207,8 +210,8 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       case str {
         "Space" -> {
           #(
-            Model(board: init_board(), keydown: str, state: Play(Up)),
-            every(250, Tick),
+            Model(..model, board: init_board(), keydown: str, state: Play(Up)),
+            every(model.tick_speed, Tick),
           )
         }
         _ -> #(Model(..model, keydown: str), effect.none())

@@ -3,7 +3,6 @@ import gleam/float
 import gleam/int
 import gleam/io
 import gleam/list
-import gleam/queue.{type Queue}
 import gleam/set.{type Set}
 import lustre
 import lustre/attribute
@@ -59,7 +58,7 @@ type Pos {
 }
 
 type Snek {
-  Snek(body: Queue(Pos), food: Int)
+  Snek(body: List(Pos), food: Int)
 }
 
 type Board {
@@ -96,7 +95,7 @@ fn init_board() -> Board {
 }
 
 fn init_snek(p: Pos) -> Snek {
-  Snek(body: queue.from_list([p, p, p]), food: 0)
+  Snek(body: [p, p, p], food: 0)
 }
 
 fn init_food(exclude: Pos, w: Int, h: Int) -> Set(Pos) {
@@ -230,8 +229,8 @@ fn move(model: Model, mv: Move) -> Model {
 }
 
 fn move_snek(board: Board, mv: Move) -> #(Board, Bool) {
-  case queue.pop_front(board.snek.body) {
-    Ok(#(head, _)) -> {
+  case board.snek.body {
+    [head, ..] -> {
       let head = new_head(head, mv)
       let #(new_food, ate) = update_food(head, board.food)
       let new_food =
@@ -245,11 +244,11 @@ fn move_snek(board: Board, mv: Move) -> #(Board, Bool) {
         case board.snek.food > 0 {
           True -> {
             let body = board.snek.body
-            Snek(queue.push_front(body, head), food)
+            Snek([head, ..body], food)
           }
           False -> {
             let body = drop_last(board.snek.body)
-            Snek(queue.push_front(body, head), food)
+            Snek([head, ..body], food)
           }
         }
       }
@@ -258,17 +257,15 @@ fn move_snek(board: Board, mv: Move) -> #(Board, Bool) {
         || check_self_collide(head, board.snek)
       #(Board(..board, snek: snek, food: new_food), game_over)
     }
-    Error(_) -> #(board, True)
+    _ -> #(board, True)
   }
 }
 
 fn check_self_collide(head: Pos, snek: Snek) -> Bool {
-  let body =
-    case snek.food > 0 {
-      True -> snek.body
-      False -> drop_last(snek.body)
-    }
-    |> queue.to_list
+  let body = case snek.food > 0 {
+    True -> snek.body
+    False -> drop_last(snek.body)
+  }
   let len1 = body |> list.length
   let body2 = body |> list.filter(fn(x) { x != head })
   let len2 = body2 |> list.length
@@ -302,7 +299,7 @@ fn add_random_food(
 }
 
 fn body_contains(snek: Snek, pos: Pos) -> Bool {
-  list.contains(snek.body |> queue.to_list, pos)
+  list.contains(snek.body, pos)
 }
 
 fn random_pos(w: Int, h: Int) -> Pos {
@@ -328,10 +325,15 @@ fn new_head(head: Pos, mv: Move) -> Pos {
   }
 }
 
-fn drop_last(snek: Queue(Pos)) -> Queue(Pos) {
-  case queue.pop_back(snek) {
-    Ok(#(_, q)) -> q
-    Error(_) -> queue.new()
+fn drop_last(xs: List(v)) -> List(v) {
+  xs |> drop_last_recursive([]) |> list.reverse
+}
+
+fn drop_last_recursive(xs: List(v), acc: List(v)) -> List(v) {
+  case xs {
+    [x, _] -> [x, ..acc]
+    [x, ..rest] -> drop_last_recursive(rest, [x, ..acc])
+    _ -> acc
   }
 }
 
@@ -494,10 +496,9 @@ fn grid(board: Board) {
   )
 }
 
-fn snek_to_points(snek: Queue(Pos), size: Int) -> String {
+fn snek_to_points(snek: List(Pos), size: Int) -> String {
   let half_size = size / 2
   snek
-  |> queue.to_list
   |> list.map(fn(pos) {
     Pos({ pos.x * size } + half_size, { pos.y * size } + half_size)
   })

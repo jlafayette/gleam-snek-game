@@ -77,28 +77,21 @@ type Model {
   Model(board: Board, state: GameState, keydown: String)
 }
 
-const width = 10
-
-const height = 15
-
-const tile_size = 40
-
-const snek_init_pos = Pos(6, 6)
-
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
-  #(
-    Model(
-      Board(
-        init_food(snek_init_pos, width, height),
-        init_snek(snek_init_pos),
-        width,
-        height,
-        tile_size,
-      ),
-      Menu,
-      "N/A",
-    ),
-    every(500, Tick),
+  #(Model(init_board(), Menu, "N/A"), every(500, Tick))
+}
+
+fn init_board() -> Board {
+  let width = 10
+  let height = 15
+  let tile_size = 40
+  let snek_init_pos = Pos(5, 8)
+  Board(
+    init_food(snek_init_pos, width, height),
+    init_snek(snek_init_pos),
+    width,
+    height,
+    tile_size,
   )
 }
 
@@ -214,15 +207,7 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       case str {
         "Space" -> {
           #(
-            Model(
-              board: Board(
-                ..model.board,
-                food: init_food(snek_init_pos, width, height),
-                snek: init_snek(snek_init_pos),
-              ),
-              keydown: str,
-              state: Play(Up),
-            ),
+            Model(board: init_board(), keydown: str, state: Play(Up)),
             every(250, Tick),
           )
         }
@@ -306,7 +291,7 @@ fn add_random_food(
   w: Int,
   h: Int,
 ) -> Set(Pos) {
-  case int.random(10) {
+  case int.random(5) {
     0 -> {
       let p = random_pos(w, h)
       case head == p || body_contains(snek, p) {

@@ -4,6 +4,7 @@ import gleam/int
 import gleam/io
 import gleam/list
 import gleam/queue.{type Queue}
+import gleam/set.{type Set}
 import lustre
 import lustre/attribute
 import lustre/effect
@@ -62,7 +63,7 @@ type Snek {
 }
 
 type Board {
-  Board(food: List(Pos), snek: Snek, w: Int, h: Int, size: Int)
+  Board(food: Set(Pos), snek: Snek, w: Int, h: Int, size: Int)
 }
 
 type GameState {
@@ -76,21 +77,41 @@ type Model {
   Model(board: Board, state: GameState, keydown: String)
 }
 
+const width = 10
+
+const height = 15
+
+const tile_size = 40
+
+const snek_init_pos = Pos(6, 6)
+
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
   #(
     Model(
       Board(
-        [Pos(0, 0), Pos(9, 9), Pos(3, 8)],
-        Snek(body: queue.from_list([Pos(6, 6), Pos(6, 6), Pos(6, 6)]), food: 0),
-        10,
-        15,
-        40,
+        init_food(snek_init_pos, width, height),
+        init_snek(snek_init_pos),
+        width,
+        height,
+        tile_size,
       ),
       Menu,
       "N/A",
     ),
     every(500, Tick),
   )
+}
+
+fn init_snek(p: Pos) -> Snek {
+  Snek(body: queue.from_list([p, p, p]), food: 0)
+}
+
+fn init_food(exclude: Pos, w: Int, h: Int) -> Set(Pos) {
+  let f = Pos(int.random(w), int.random(h))
+  case f == exclude {
+    True -> init_food(exclude, w, h)
+    False -> set.from_list([f])
+  }
 }
 
 // --- Update
@@ -192,7 +213,18 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     Keydown(str) -> {
       case str {
         "Space" -> {
-          #(Model(..model, keydown: str, state: Play(Up)), every(250, Tick))
+          #(
+            Model(
+              board: Board(
+                ..model.board,
+                food: init_food(snek_init_pos, width, height),
+                snek: init_snek(snek_init_pos),
+              ),
+              keydown: str,
+              state: Play(Up),
+            ),
+            every(250, Tick),
+          )
         }
         _ -> #(Model(..model, keydown: str), effect.none())
       }
@@ -214,6 +246,8 @@ fn move_snek(board: Board, mv: Move) -> #(Board, Bool) {
     Ok(#(head, _)) -> {
       let head = new_head(head, mv)
       let #(new_food, ate) = update_food(head, board.food)
+      let new_food =
+        add_random_food(head, board.snek, new_food, board.w, board.h)
       case
         check_collide(head, board.w, board.h)
         || check_self_collide(head, board.snek)
@@ -258,11 +292,38 @@ fn check_self_collide(head: Pos, snek: Snek) -> Bool {
   len1 > len2
 }
 
-fn update_food(head: Pos, food: List(Pos)) -> #(List(Pos), Bool) {
-  let len1 = list.length(food)
-  let food2 = food |> list.filter(fn(f) { f != head })
-  let len2 = list.length(food2)
+fn update_food(head: Pos, food: Set(Pos)) -> #(Set(Pos), Bool) {
+  let len1 = set.size(food)
+  let food2 = set.delete(food, head)
+  let len2 = set.size(food2)
   #(food2, len1 > len2)
+}
+
+fn add_random_food(
+  head: Pos,
+  snek: Snek,
+  food: Set(Pos),
+  w: Int,
+  h: Int,
+) -> Set(Pos) {
+  case int.random(10) {
+    0 -> {
+      let p = random_pos(w, h)
+      case head == p || body_contains(snek, p) {
+        True -> food
+        False -> set.insert(food, p)
+      }
+    }
+    _ -> food
+  }
+}
+
+fn body_contains(snek: Snek, pos: Pos) -> Bool {
+  list.contains(snek.body |> queue.to_list, pos)
+}
+
+fn random_pos(w: Int, h: Int) -> Pos {
+  Pos(int.random(w), int.random(h))
 }
 
 fn check_collide(head: Pos, w: Int, h: Int) -> Bool {
@@ -421,6 +482,7 @@ fn grid(board: Board) {
       svg.g(
         [attr_str("fill", color.food()), attr("stroke-width", 0)],
         board.food
+          |> set.to_list
           |> list.map(fn(pos) {
             svg.circle([
               attr("cx", { pos.x * size } + half_size),

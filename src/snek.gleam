@@ -64,6 +64,7 @@ type Board {
 type GameState {
   Menu
   Play(Move)
+  Pause(Move)
 }
 
 type Model {
@@ -111,6 +112,9 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     Play(mv) -> {
       update_play(model, msg, mv)
     }
+    Pause(mv) -> {
+      update_pause(model, msg, mv)
+    }
   }
 }
 
@@ -128,14 +132,18 @@ fn update_menu(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 fn update_play(model: Model, msg: Msg, mv: Move) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) -> {
-      let mv = case str {
-        "KeyW" | "ArrowUp" -> Up
-        "KeyA" | "ArrowLeft" -> Left
-        "KeyS" | "ArrowDown" -> Down
-        "KeyD" | "ArrowRight" -> Right
-        _ -> mv
+      let state = case str {
+        "KeyW" | "ArrowUp" -> Play(Up)
+        "KeyA" | "ArrowLeft" -> Play(Left)
+        "KeyS" | "ArrowDown" -> Play(Down)
+        "KeyD" | "ArrowRight" -> Play(Right)
+        "Escape" | "Space" -> {
+          let _ = window_clear_interval()
+          Pause(mv)
+        }
+        _ -> Play(mv)
       }
-      #(Model(..model, keydown: str, state: Play(mv)), effect.none())
+      #(Model(..model, keydown: str, state: state), effect.none())
     }
     Tick -> {
       io.debug("tick")
@@ -150,6 +158,24 @@ fn update_play(model: Model, msg: Msg, mv: Move) -> #(Model, effect.Effect(Msg))
       let _ = window_clear_interval()
       #(model, effect.none())
     }
+  }
+}
+
+fn update_pause(
+  model: Model,
+  msg: Msg,
+  mv: Move,
+) -> #(Model, effect.Effect(Msg)) {
+  case msg {
+    Keydown(str) -> {
+      case str {
+        "Escape" | "Space" -> {
+          #(Model(..model, keydown: str, state: Play(mv)), every(250, Tick))
+        }
+        _ -> #(Model(..model, keydown: str), effect.none())
+      }
+    }
+    _ -> #(model, effect.none())
   }
 }
 
@@ -194,10 +220,9 @@ fn menu_font_class() {
 }
 
 fn view(model: Model) {
-  html.div([class("fullscreen")], [
-    // ui.button([event.on_click(TickStop), button.solid()], [text("Stop")]),
-    case model.state {
-      Menu -> {
+  html.div([class("fullscreen")], case model.state {
+    Menu -> {
+      [
         html.div([class("mask")], [
           html.h1([class("game-header")], [text("Snek Game")]),
           html.p([class("sub-header"), menu_font_class()], [
@@ -209,15 +234,25 @@ fn view(model: Model) {
           html.p([class("controls-text"), menu_font_class()], [
             text("Use WASD or arrow keys to move"),
           ]),
-        ])
-      }
-      Play(_) -> grid(model.board)
-    },
-  ])
-}
-
-fn button(msg: Msg, txt: String) {
-  ui.button([event.on_click(msg), button.solid()], [text(txt)])
+        ]),
+      ]
+    }
+    Play(_) -> [grid(model.board)]
+    Pause(_) -> {
+      [
+        grid(model.board),
+        html.div([class("pause-mask")], [
+          // html.div([], [
+          html.div([class("pause-box")], [
+            html.h3([class("pause-header"), menu_font_class()], [text("PAUSED")]),
+            html.p([class("pause-text"), menu_font_class()], [
+              text("Press 'SPACE' or 'ESC' to continue"),
+            ]),
+          ]),
+        ]),
+      ]
+    }
+  })
 }
 
 const attr_str = attribute.attribute

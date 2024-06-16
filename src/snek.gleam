@@ -85,7 +85,7 @@ fn init_board() -> Board {
   let width = 20
   let height = 15
   let tile_size = 40
-  let snek_init_pos = Pos(5, 8)
+  let snek_init_pos = Pos(width / 2, height / 2)
   Board(
     init_food(snek_init_pos, width, height),
     init_snek(snek_init_pos),
@@ -224,7 +224,7 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 fn move(model: Model, mv: Move) -> Model {
   let #(new_board, game_over) = move_snek(model.board, mv)
   case game_over {
-    True -> Model(..model, state: GameOver)
+    True -> Model(..model, board: new_board, state: GameOver)
     False -> Model(..model, board: new_board)
   }
 }
@@ -236,34 +236,29 @@ fn move_snek(board: Board, mv: Move) -> #(Board, Bool) {
       let #(new_food, ate) = update_food(head, board.food)
       let new_food =
         add_random_food(head, board.snek, new_food, board.w, board.h)
-      case
-        check_collide(head, board.w, board.h)
-        || check_self_collide(head, board.snek)
-      {
-        True -> #(board, True)
-        False -> {
-          let snek = {
-            let food = int.max(0, board.snek.food - 1)
-            let food = case ate {
-              True -> food + 1
-              False -> food
-            }
-            case board.snek.food > 0 {
-              True -> {
-                let body = board.snek.body
-                Snek(queue.push_front(body, head), food)
-              }
-              False -> {
-                let body = drop_last(board.snek.body)
-                Snek(queue.push_front(body, head), food)
-              }
-            }
+      let snek = {
+        let food = int.max(0, board.snek.food - 1)
+        let food = case ate {
+          True -> food + 1
+          False -> food
+        }
+        case board.snek.food > 0 {
+          True -> {
+            let body = board.snek.body
+            Snek(queue.push_front(body, head), food)
           }
-          #(Board(..board, snek: snek, food: new_food), False)
+          False -> {
+            let body = drop_last(board.snek.body)
+            Snek(queue.push_front(body, head), food)
+          }
         }
       }
+      let game_over =
+        check_collide(head, board.w, board.h)
+        || check_self_collide(head, board.snek)
+      #(Board(..board, snek: snek, food: new_food), game_over)
     }
-    Error(_) -> #(board, False)
+    Error(_) -> #(board, True)
   }
 }
 

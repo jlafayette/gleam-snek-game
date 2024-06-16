@@ -57,8 +57,12 @@ type Pos {
   Pos(x: Int, y: Int)
 }
 
+type Snek {
+  Snek(body: Queue(Pos), food: Int)
+}
+
 type Board {
-  Board(food: List(Pos), snek: Queue(Pos), w: Int, h: Int, size: Int)
+  Board(food: List(Pos), snek: Snek, w: Int, h: Int, size: Int)
 }
 
 type GameState {
@@ -77,7 +81,7 @@ fn init(_flags) -> #(Model, effect.Effect(Msg)) {
     Model(
       Board(
         [Pos(0, 0), Pos(9, 9), Pos(3, 8)],
-        queue.from_list([Pos(6, 6), Pos(6, 6), Pos(6, 6)]),
+        Snek(body: queue.from_list([Pos(6, 6), Pos(6, 6), Pos(6, 6)]), food: 0),
         10,
         15,
         40,
@@ -206,20 +210,59 @@ fn move(model: Model, mv: Move) -> Model {
 }
 
 fn move_snek(board: Board, mv: Move) -> #(Board, Bool) {
-  case queue.pop_front(board.snek) {
+  case queue.pop_front(board.snek.body) {
     Ok(#(head, _)) -> {
       let head = new_head(head, mv)
-      case check_collide(head, board.w, board.h) {
+      let #(new_food, ate) = update_food(head, board.food)
+      case
+        check_collide(head, board.w, board.h)
+        || check_self_collide(head, board.snek)
+      {
         True -> #(board, True)
         False -> {
-          let s = drop_last(board.snek)
-          let snek = queue.push_front(s, head)
-          #(Board(..board, snek: snek), False)
+          let snek = {
+            let food = int.max(0, board.snek.food - 1)
+            let food = case ate {
+              True -> food + 1
+              False -> food
+            }
+            case board.snek.food > 0 {
+              True -> {
+                let body = board.snek.body
+                Snek(queue.push_front(body, head), food)
+              }
+              False -> {
+                let body = drop_last(board.snek.body)
+                Snek(queue.push_front(body, head), food)
+              }
+            }
+          }
+          #(Board(..board, snek: snek, food: new_food), False)
         }
       }
     }
-    Error(_) -> #(Board(..board, snek: queue.new()), False)
+    Error(_) -> #(board, False)
   }
+}
+
+fn check_self_collide(head: Pos, snek: Snek) -> Bool {
+  let body =
+    case snek.food > 0 {
+      True -> snek.body
+      False -> drop_last(snek.body)
+    }
+    |> queue.to_list
+  let len1 = body |> list.length
+  let body2 = body |> list.filter(fn(x) { x != head })
+  let len2 = body2 |> list.length
+  len1 > len2
+}
+
+fn update_food(head: Pos, food: List(Pos)) -> #(List(Pos), Bool) {
+  let len1 = list.length(food)
+  let food2 = food |> list.filter(fn(f) { f != head })
+  let len2 = list.length(food2)
+  #(food2, len1 > len2)
 }
 
 fn check_collide(head: Pos, w: Int, h: Int) -> Bool {
@@ -398,7 +441,7 @@ fn grid(board: Board) {
             attr_str("stroke-linecap", "square"),
             // attr_str("stroke-linejoin", "round"),
             // attr_str("points", "20,20 20,60 60,60"),
-            attr_str("points", snek_to_points(board.snek, size)),
+            attr_str("points", snek_to_points(board.snek.body, size)),
           ]),
         ],
       ),

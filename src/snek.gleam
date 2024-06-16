@@ -65,6 +65,7 @@ type GameState {
   Menu
   Play(Move)
   Pause(Move)
+  GameOver
 }
 
 type Model {
@@ -77,8 +78,8 @@ fn init(_flags) -> #(Model, effect.Effect(Msg)) {
       Board(
         [Pos(0, 0), Pos(9, 9), Pos(3, 8)],
         queue.from_list([Pos(6, 6), Pos(6, 6), Pos(6, 6)]),
-        400,
-        600,
+        10,
+        15,
         40,
       ),
       Menu,
@@ -114,6 +115,9 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     }
     Pause(mv) -> {
       update_pause(model, msg, mv)
+    }
+    GameOver -> {
+      update_game_over(model, msg)
     }
   }
 }
@@ -179,20 +183,52 @@ fn update_pause(
   }
 }
 
-fn move(model: Model, mv: Move) -> Model {
-  Model(
-    ..model,
-    board: Board(..model.board, snek: move_snek(model.board.snek, mv)),
-  )
+fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
+  case msg {
+    Keydown(str) -> {
+      case str {
+        "Space" -> {
+          #(Model(..model, keydown: str, state: Play(Up)), every(250, Tick))
+        }
+        _ -> #(Model(..model, keydown: str), effect.none())
+      }
+    }
+    _ -> #(model, effect.none())
+  }
 }
 
-fn move_snek(snek: Queue(Pos), mv: Move) -> Queue(Pos) {
-  case queue.pop_front(snek) {
+fn move(model: Model, mv: Move) -> Model {
+  let #(new_board, game_over) = move_snek(model.board, mv)
+  case game_over {
+    True -> Model(..model, state: GameOver)
+    False -> Model(..model, board: new_board)
+  }
+}
+
+fn move_snek(board: Board, mv: Move) -> #(Board, Bool) {
+  case queue.pop_front(board.snek) {
     Ok(#(head, _)) -> {
-      let s = drop_last(snek)
-      queue.push_front(s, new_head(head, mv))
+      let head = new_head(head, mv)
+      case check_collide(head, board.w, board.h) {
+        True -> #(board, True)
+        False -> {
+          let s = drop_last(board.snek)
+          let snek = queue.push_front(s, head)
+          #(Board(..board, snek: snek), False)
+        }
+      }
     }
-    Error(_) -> queue.new()
+    Error(_) -> #(Board(..board, snek: queue.new()), False)
+  }
+}
+
+fn check_collide(head: Pos, w: Int, h: Int) -> Bool {
+  case head {
+    Pos(x, _) if x < 0 -> True
+    Pos(x, _) if x >= w -> True
+    Pos(_, y) if y < 0 -> True
+    Pos(_, y) if y >= h -> True
+    _ -> False
   }
 }
 
@@ -252,6 +288,21 @@ fn view(model: Model) {
         ]),
       ]
     }
+    GameOver -> {
+      [
+        grid(model.board),
+        html.div([class("pause-mask")], [
+          html.div([class("pause-box")], [
+            html.h3([class("pause-header"), menu_font_class()], [
+              text("GAME OVER"),
+            ]),
+            html.p([class("pause-text"), menu_font_class()], [
+              text("Press 'SPACE' to play again"),
+            ]),
+          ]),
+        ]),
+      ]
+    }
   })
 }
 
@@ -276,9 +327,9 @@ fn int_fraction(n: Int, mult: Float) -> Int {
 }
 
 fn grid(board: Board) {
-  let w = board.w
-  let h = board.h
   let size = board.size
+  let w = board.w * size
+  let h = board.h * size
   let half_size = size / 2
   let snek_width = int_fraction(size, 0.5)
   let food_radius = int_fraction(half_size, 0.5)

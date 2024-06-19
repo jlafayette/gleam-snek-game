@@ -65,10 +65,17 @@ type Board {
   Board(food: Set(Pos), snek: Snek, w: Int, h: Int, size: Int)
 }
 
+type Move {
+  Left
+  Right
+  Down
+  Up
+}
+
 type GameState {
   Menu
-  Play(Move)
-  Pause(Move)
+  Play(Move, Move)
+  Pause(Move, Move)
   GameOver
 }
 
@@ -108,13 +115,6 @@ fn init_food(exclude: Pos, w: Int, h: Int) -> Set(Pos) {
 
 // --- Update
 
-type Move {
-  Left
-  Right
-  Down
-  Up
-}
-
 type Msg {
   Keydown(String)
   Tick
@@ -127,11 +127,11 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     Menu -> {
       update_menu(model, msg)
     }
-    Play(mv) -> {
-      update_play(model, msg, mv)
+    Play(prev_mv, mv) -> {
+      update_play(model, msg, prev_mv, mv)
     }
-    Pause(mv) -> {
-      update_pause(model, msg, mv)
+    Pause(prev_mv, mv) -> {
+      update_pause(model, msg, prev_mv, mv)
     }
     GameOver -> {
       update_game_over(model, msg)
@@ -142,7 +142,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 fn update_menu(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) if str == "Space" -> #(
-      Model(..model, state: Play(Up), keydown: str),
+      Model(..model, state: Play(Up, Up), keydown: str),
       every(model.tick_speed, Tick),
     )
     Keydown(str) -> #(Model(..model, keydown: str), effect.none())
@@ -150,25 +150,30 @@ fn update_menu(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   }
 }
 
-fn update_play(model: Model, msg: Msg, mv: Move) -> #(Model, effect.Effect(Msg)) {
+fn update_play(
+  model: Model,
+  msg: Msg,
+  prev_mv: Move,
+  mv: Move,
+) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) -> {
       let state = case str {
-        "KeyW" | "ArrowUp" -> Play(Up)
-        "KeyA" | "ArrowLeft" -> Play(Left)
-        "KeyS" | "ArrowDown" -> Play(Down)
-        "KeyD" | "ArrowRight" -> Play(Right)
+        "KeyW" | "ArrowUp" -> Play(prev_mv, Up)
+        "KeyA" | "ArrowLeft" -> Play(prev_mv, Left)
+        "KeyS" | "ArrowDown" -> Play(prev_mv, Down)
+        "KeyD" | "ArrowRight" -> Play(prev_mv, Right)
         "Escape" | "Space" -> {
           let _ = window_clear_interval()
-          Pause(mv)
+          Pause(prev_mv, mv)
         }
-        _ -> Play(mv)
+        _ -> Play(prev_mv, mv)
       }
       #(Model(..model, keydown: str, state: state), effect.none())
     }
     Tick -> {
       io.debug("tick")
-      #(move(model, mv), effect.none())
+      #(move(model, prev_mv, mv), effect.none())
     }
     TickStart(ms) -> {
       io.debug("tick-start")
@@ -185,6 +190,7 @@ fn update_play(model: Model, msg: Msg, mv: Move) -> #(Model, effect.Effect(Msg))
 fn update_pause(
   model: Model,
   msg: Msg,
+  prev_mv: Move,
   mv: Move,
 ) -> #(Model, effect.Effect(Msg)) {
   case msg {
@@ -192,7 +198,7 @@ fn update_pause(
       case str {
         "Escape" | "Space" -> {
           #(
-            Model(..model, keydown: str, state: Play(mv)),
+            Model(..model, keydown: str, state: Play(prev_mv, mv)),
             every(model.tick_speed, Tick),
           )
         }
@@ -209,7 +215,12 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       case str {
         "Space" -> {
           #(
-            Model(..model, board: init_board(), keydown: str, state: Play(Up)),
+            Model(
+              ..model,
+              board: init_board(),
+              keydown: str,
+              state: Play(Up, Up),
+            ),
             every(model.tick_speed, Tick),
           )
         }
@@ -220,25 +231,25 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   }
 }
 
-fn move(model: Model, mv: Move) -> Model {
-  let #(new_board, game_over) = move_snek(model.board, mv)
+fn move(model: Model, prev_mv: Move, mv: Move) -> Model {
+  let #(new_board, game_over, mv_taken) = move_snek(model.board, prev_mv, mv)
   case game_over {
     True -> Model(..model, board: new_board, state: GameOver)
-    False -> Model(..model, board: new_board)
+    False -> Model(..model, board: new_board, state: Play(mv_taken, mv_taken))
   }
 }
 
-fn move_snek(board: Board, mv: Move) -> #(Board, Bool) {
+fn move_snek(board: Board, prev_mv: Move, mv: Move) -> #(Board, Bool, Move) {
   case board.snek.body {
-    [head, ..] -> {
-      let head = new_head(head, mv)
+    [head, ..body] -> {
+      let #(head, mv_taken) = new_head(head, body, prev_mv, mv)
       let #(new_food, ate) = update_food(head, board.food)
       let new_food =
         add_random_food(head, board.snek, new_food, board.w, board.h)
       let snek = {
         let food = int.max(0, board.snek.food - 1)
         let food = case ate {
-          True -> food + 1
+          True -> food + 2
           False -> food
         }
         case board.snek.food > 0 {
@@ -255,9 +266,9 @@ fn move_snek(board: Board, mv: Move) -> #(Board, Bool) {
       let game_over =
         check_collide(head, board.w, board.h)
         || check_self_collide(head, board.snek)
-      #(Board(..board, snek: snek, food: new_food), game_over)
+      #(Board(..board, snek: snek, food: new_food), game_over, mv_taken)
     }
-    _ -> #(board, True)
+    _ -> #(board, True, mv)
   }
 }
 
@@ -316,12 +327,28 @@ fn check_collide(head: Pos, w: Int, h: Int) -> Bool {
   }
 }
 
-fn new_head(head: Pos, mv: Move) -> Pos {
-  case mv {
+fn new_head(head: Pos, body: List(Pos), prev_mv: Move, mv: Move) -> #(Pos, Move) {
+  let head1 = case mv {
     Left -> Pos(head.x - 1, head.y)
     Right -> Pos(head.x + 1, head.y)
     Down -> Pos(head.x, head.y + 1)
     Up -> Pos(head.x, head.y - 1)
+  }
+  let collide = case body {
+    [neck, ..] -> head1 == neck
+    _ -> False
+  }
+  case collide {
+    True -> {
+      let head = case prev_mv {
+        Left -> Pos(head.x - 1, head.y)
+        Right -> Pos(head.x + 1, head.y)
+        Down -> Pos(head.x, head.y + 1)
+        Up -> Pos(head.x, head.y - 1)
+      }
+      #(head, prev_mv)
+    }
+    False -> #(head1, mv)
   }
 }
 
@@ -362,8 +389,8 @@ fn view(model: Model) {
         ]),
       ]
     }
-    Play(_) -> [grid(model.board)]
-    Pause(_) -> {
+    Play(_, _) -> [grid(model.board)]
+    Pause(_, _) -> {
       [
         grid(model.board),
         html.div([class("pause-mask")], [

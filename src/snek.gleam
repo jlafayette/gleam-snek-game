@@ -62,7 +62,7 @@ type Snek {
 }
 
 type Board {
-  Board(food: Set(Pos), snek: Snek, w: Int, h: Int, size: Int)
+  Board(food: Set(Pos), snek: Snek, walls: List(Pos), w: Int, h: Int, size: Int)
 }
 
 type Move {
@@ -91,10 +91,12 @@ fn init_board() -> Board {
   let width = 20
   let height = 15
   let tile_size = 40
-  let snek_init_pos = Pos(width / 2, height / 2)
+  let level = 2
+  let #(walls, snek_init_pos) = init_walls(level, width, height)
   Board(
     init_food(snek_init_pos, width, height),
     init_snek(snek_init_pos),
+    walls,
     width,
     height,
     tile_size,
@@ -110,6 +112,21 @@ fn init_food(exclude: Pos, w: Int, h: Int) -> Set(Pos) {
   case f == exclude {
     True -> init_food(exclude, w, h)
     False -> set.from_list([f])
+  }
+}
+
+fn init_walls(level: Int, w: Int, h: Int) -> #(List(Pos), Pos) {
+  case level {
+    1 -> #([], Pos(w / 2, h / 2))
+    2 -> {
+      let wall_h = h / 2
+      let gap = 3
+      let walls =
+        list.range(gap, w - gap - 1)
+        |> list.map(fn(x) { Pos(x, wall_h) })
+      #(walls, Pos(w / 4, h / 4))
+    }
+    _ -> #([], Pos(w / 2, h / 2))
   }
 }
 
@@ -142,7 +159,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 fn update_menu(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) if str == "Space" -> #(
-      Model(..model, state: Play(Up, Up), keydown: str),
+      Model(..model, state: Play(Right, Right), keydown: str),
       every(model.tick_speed, Tick),
     )
     Keydown(str) -> #(Model(..model, keydown: str), effect.none())
@@ -219,7 +236,7 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
               ..model,
               board: init_board(),
               keydown: str,
-              state: Play(Up, Up),
+              state: Play(Right, Right),
             ),
             every(model.tick_speed, Tick),
           )
@@ -265,6 +282,7 @@ fn move_snek(board: Board, prev_mv: Move, mv: Move) -> #(Board, Bool, Move) {
       }
       let game_over =
         check_collide(head, board.w, board.h)
+        || check_wall_collide(head, board.walls)
         || check_self_collide(head, board.snek)
       #(Board(..board, snek: snek, food: new_food), game_over, mv_taken)
     }
@@ -281,6 +299,10 @@ fn check_self_collide(head: Pos, snek: Snek) -> Bool {
   let body2 = body |> list.filter(fn(x) { x != head })
   let len2 = body2 |> list.length
   len1 > len2
+}
+
+fn check_wall_collide(head: Pos, walls: List(Pos)) -> Bool {
+  list.contains(walls, head)
 }
 
 fn update_food(head: Pos, food: Set(Pos)) -> #(Set(Pos), Bool) {
@@ -488,6 +510,19 @@ fn grid(board: Board) {
           |> list.map(fn(a) {
             let y = a * size
             line(0, y, w, y, grid_line_width)
+          }),
+      ),
+      // walls
+      svg.g(
+        [attr_str("fill", color.background()), attr("strok-width", 0)],
+        board.walls
+          |> list.map(fn(pos) {
+            svg.rect([
+              attr("x", pos.x * size),
+              attr("y", pos.y * size),
+              attr("width", size),
+              attr("height", size),
+            ])
           }),
       ),
       // food

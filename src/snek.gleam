@@ -94,7 +94,7 @@ fn init_board() -> Board {
   let level = 2
   let #(walls, snek_init_pos) = init_walls(level, width, height)
   Board(
-    init_food(snek_init_pos, width, height),
+    init_food([snek_init_pos, ..walls], width, height),
     init_snek(snek_init_pos),
     walls,
     width,
@@ -107,9 +107,9 @@ fn init_snek(p: Pos) -> Snek {
   Snek(body: [p, p, p], food: 0)
 }
 
-fn init_food(exclude: Pos, w: Int, h: Int) -> Set(Pos) {
+fn init_food(exclude: List(Pos), w: Int, h: Int) -> Set(Pos) {
   let f = Pos(int.random(w), int.random(h))
-  case f == exclude {
+  case list.contains(exclude, f) {
     True -> init_food(exclude, w, h)
     False -> set.from_list([f])
   }
@@ -261,8 +261,7 @@ fn move_snek(board: Board, prev_mv: Move, mv: Move) -> #(Board, Bool, Move) {
     [head, ..body] -> {
       let #(head, mv_taken) = new_head(head, body, prev_mv, mv)
       let #(new_food, ate) = update_food(head, board.food)
-      let new_food =
-        add_random_food(head, board.snek, new_food, board.w, board.h)
+      let new_food = add_random_food(head, board, new_food)
       let snek = {
         let food = int.max(0, board.snek.food - 1)
         let food = case ate {
@@ -295,10 +294,7 @@ fn check_self_collide(head: Pos, snek: Snek) -> Bool {
     True -> snek.body
     False -> drop_last(snek.body)
   }
-  let len1 = body |> list.length
-  let body2 = body |> list.filter(fn(x) { x != head })
-  let len2 = body2 |> list.length
-  len1 > len2
+  list.contains(body, head)
 }
 
 fn check_wall_collide(head: Pos, walls: List(Pos)) -> Bool {
@@ -312,17 +308,15 @@ fn update_food(head: Pos, food: Set(Pos)) -> #(Set(Pos), Bool) {
   #(food2, len1 > len2)
 }
 
-fn add_random_food(
-  head: Pos,
-  snek: Snek,
-  food: Set(Pos),
-  w: Int,
-  h: Int,
-) -> Set(Pos) {
+fn add_random_food(head: Pos, board: Board, food: Set(Pos)) -> Set(Pos) {
+  let w = board.w
+  let h = board.h
+  let snek = board.snek
+  let walls = board.walls
   case int.random(5) {
     0 -> {
       let p = random_pos(w, h)
-      case head == p || body_contains(snek, p) {
+      case head == p || body_contains(snek, p) || check_wall_collide(p, walls) {
         True -> food
         False -> set.insert(food, p)
       }

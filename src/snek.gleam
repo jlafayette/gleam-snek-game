@@ -80,11 +80,17 @@ type GameState {
 }
 
 type Model {
-  Model(board: Board, tick_speed: Int, state: GameState, keydown: String)
+  Model(
+    board: Board,
+    score: Int,
+    tick_speed: Int,
+    state: GameState,
+    keydown: String,
+  )
 }
 
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
-  #(Model(init_board(), 250, Menu, "N/A"), effect.none())
+  #(Model(init_board(), 0, 250, Menu, "N/A"), effect.none())
 }
 
 fn init_board() -> Board {
@@ -249,14 +255,21 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 }
 
 fn move(model: Model, prev_mv: Move, mv: Move) -> Model {
-  let #(new_board, game_over, mv_taken) = move_snek(model.board, prev_mv, mv)
+  let #(new_board, game_over, score_increase, mv_taken) =
+    move_snek(model.board, prev_mv, mv)
   case game_over {
     True -> Model(..model, board: new_board, state: GameOver)
-    False -> Model(..model, board: new_board, state: Play(mv_taken, mv_taken))
+    False ->
+      Model(
+        ..model,
+        board: new_board,
+        score: model.score + score_increase,
+        state: Play(mv_taken, mv_taken),
+      )
   }
 }
 
-fn move_snek(board: Board, prev_mv: Move, mv: Move) -> #(Board, Bool, Move) {
+fn move_snek(board: Board, prev_mv: Move, mv: Move) -> #(Board, Bool, Int, Move) {
   case board.snek.body {
     [head, ..body] -> {
       let #(head, mv_taken) = new_head(head, body, prev_mv, mv)
@@ -283,9 +296,13 @@ fn move_snek(board: Board, prev_mv: Move, mv: Move) -> #(Board, Bool, Move) {
         check_collide(head, board.w, board.h)
         || check_wall_collide(head, board.walls)
         || check_self_collide(head, board.snek)
-      #(Board(..board, snek: snek, food: new_food), game_over, mv_taken)
+      let score = case game_over, ate {
+        False, True -> 200
+        _, _ -> 0
+      }
+      #(Board(..board, snek: snek, food: new_food), game_over, score, mv_taken)
     }
-    _ -> #(board, True, mv)
+    _ -> #(board, True, 0, mv)
   }
 }
 
@@ -405,12 +422,11 @@ fn view(model: Model) {
         ]),
       ]
     }
-    Play(_, _) -> [grid(model.board)]
+    Play(_, _) -> [grid(model.board, model.score)]
     Pause(_, _) -> {
       [
-        grid(model.board),
+        grid(model.board, model.score),
         html.div([class("pause-mask")], [
-          // html.div([], [
           html.div([class("pause-box")], [
             html.h3([class("pause-header"), menu_font_class()], [text("PAUSED")]),
             html.p([class("pause-text"), menu_font_class()], [
@@ -422,7 +438,7 @@ fn view(model: Model) {
     }
     GameOver -> {
       [
-        grid(model.board),
+        grid(model.board, model.score),
         html.div([class("pause-mask")], [
           html.div([class("pause-box")], [
             html.h3([class("pause-header"), menu_font_class()], [
@@ -458,10 +474,11 @@ fn int_fraction(n: Int, mult: Float) -> Int {
   int.to_float(n) *. mult |> float.round
 }
 
-fn grid(board: Board) {
+fn grid(board: Board, score: Int) {
   let size = board.size
-  let w = board.w * size
-  let h = board.h * size
+  let offset = Pos(0, size)
+  let w = board.w * size + offset.x
+  let h = board.h * size + offset.y
   let half_size = size / 2
   let snek_width = int_fraction(size, 0.5)
   let food_radius = int_fraction(half_size, 0.5)
@@ -481,20 +498,13 @@ fn grid(board: Board) {
         attr("stroke-width", 0),
         attr_str("fill", color.grid_background()),
       ]),
-      // borders
-      svg.g([attr_str("stroke", color.grid_border())], [
-        line(0, 0, w, 0, grid_line_width * 2),
-        line(0, 0, 0, h, grid_line_width * 2),
-        line(0, h, w, h, grid_line_width * 2),
-        line(w, 0, w, h, grid_line_width * 2),
-      ]),
       // vertical interior grid lines
       svg.g(
         [attr_str("stroke", color.grid_lines())],
         list.range(1, { w / size } - 1)
           |> list.map(fn(a) {
             let x = a * size
-            line(x, 0, x, h, grid_line_width)
+            line(x, size, x, h, grid_line_width)
           }),
       ),
       // horizontal interior grid lines
@@ -502,21 +512,8 @@ fn grid(board: Board) {
         [attr_str("stroke", color.grid_lines())],
         list.range(1, { h / size } - 1)
           |> list.map(fn(a) {
-            let y = a * size
+            let y = a * size + offset.y
             line(0, y, w, y, grid_line_width)
-          }),
-      ),
-      // walls
-      svg.g(
-        [attr_str("fill", color.background()), attr("strok-width", 0)],
-        board.walls
-          |> list.map(fn(pos) {
-            svg.rect([
-              attr("x", pos.x * size),
-              attr("y", pos.y * size),
-              attr("width", size),
-              attr("height", size),
-            ])
           }),
       ),
       // food
@@ -526,8 +523,8 @@ fn grid(board: Board) {
           |> set.to_list
           |> list.map(fn(pos) {
             svg.circle([
-              attr("cx", { pos.x * size } + half_size),
-              attr("cy", { pos.y * size } + half_size),
+              attr("cx", { pos.x * size } + half_size + offset.x),
+              attr("cy", { pos.y * size } + half_size + offset.y),
               attr("r", food_radius),
             ])
           }),
@@ -544,19 +541,66 @@ fn grid(board: Board) {
             attr_str("stroke-linecap", "square"),
             // attr_str("stroke-linejoin", "round"),
             // attr_str("points", "20,20 20,60 60,60"),
-            attr_str("points", snek_to_points(board.snek.body, size)),
+            attr_str(
+              "points",
+              snek_to_points(board.snek.body, size, Pos(0, size)),
+            ),
           ]),
         ],
       ),
+      // walls
+      svg.g(
+        [attr_str("fill", color.background()), attr("strok-width", 0)],
+        board.walls
+          |> list.map(fn(pos) {
+            svg.rect([
+              attr("x", pos.x * size + offset.x),
+              attr("y", pos.y * size + offset.y),
+              attr("width", size),
+              attr("height", size),
+            ])
+          }),
+      ),
+      // menu bar
+      svg.g([attr("stroke-width", 0), attr_str("fill", color.background())], [
+        svg.rect([
+          attr("x", 0),
+          attr("y", 0),
+          attr("width", w),
+          attr("height", size),
+        ]),
+      ]),
+      svg.g([attr_str("fill", "white")], [
+        svg.text(
+          [
+            attr("x", 8),
+            attr("y", offset.y - 12),
+            attr_str("class", "share-tech-mono-regular"),
+            attr_str("class", "pause-text"),
+          ],
+          "score:" <> int.to_string(score),
+        ),
+      ]),
+      // borders
+      svg.g([attr_str("stroke", color.grid_border())], [
+        line(0, 0, w, 0, grid_line_width * 2),
+        line(0, offset.y, w, size, grid_line_width),
+        line(0, 0, 0, h, grid_line_width * 2),
+        line(0, h, w, h, grid_line_width * 2),
+        line(w, 0, w, h, grid_line_width * 2),
+      ]),
     ],
   )
 }
 
-fn snek_to_points(snek: List(Pos), size: Int) -> String {
+fn snek_to_points(snek: List(Pos), size: Int, offset: Pos) -> String {
   let half_size = size / 2
   snek
   |> list.map(fn(pos) {
-    Pos({ pos.x * size } + half_size, { pos.y * size } + half_size)
+    Pos(
+      { pos.x * size } + half_size + offset.x,
+      { pos.y * size } + half_size + offset.y,
+    )
   })
   |> list.map(fn(pos) { int.to_string(pos.x) <> "," <> int.to_string(pos.y) })
   |> list.fold("", fn(pos, acc) { acc <> " " <> pos })

@@ -11,6 +11,10 @@ import lustre/element.{text}
 import lustre/element/html
 import lustre/element/svg
 
+// import input.{type Input}
+import player.{type Snek, Snek}
+import position.{type Move, type Pos, Down, Left, Pos, Right, Up}
+
 // --- Main 
 
 pub fn main() {
@@ -53,23 +57,8 @@ fn window_clear_interval() -> Nil
 
 // --- Model
 
-type Pos {
-  Pos(x: Int, y: Int)
-}
-
-type Snek {
-  Snek(body: List(Pos), food: Int)
-}
-
 type Board {
   Board(food: Set(Pos), snek: Snek, walls: List(Pos), w: Int, h: Int, size: Int)
-}
-
-type Move {
-  Left
-  Right
-  Down
-  Up
 }
 
 type GameState {
@@ -99,18 +88,15 @@ fn init_board() -> Board {
   let tile_size = 40
   let level = 2
   let #(walls, snek_init_pos) = init_walls(level, width, height)
+  let dir = Right
   Board(
     init_food([snek_init_pos, ..walls], width, height),
-    init_snek(snek_init_pos),
+    player.init(snek_init_pos, dir),
     walls,
     width,
     height,
     tile_size,
   )
-}
-
-fn init_snek(p: Pos) -> Snek {
-  Snek(body: [p, p, p], food: 0)
 }
 
 fn init_food(exclude: List(Pos), w: Int, h: Int) -> Set(Pos) {
@@ -255,8 +241,20 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 }
 
 fn move(model: Model, prev_mv: Move, mv: Move) -> Model {
-  let #(new_board, game_over, score_increase, mv_taken) =
-    move_snek(model.board, prev_mv, mv)
+  let board = model.board
+  let #(head, mv_taken) = player.new_head(model.board.snek, prev_mv, mv)
+  let #(new_food, ate) = update_food(head, board.food)
+  let new_food = add_random_food(head, board, new_food)
+  let snek = player.update(board.snek, head, mv_taken, ate)
+  let game_over =
+    check_collide(head, board.w, board.h)
+    || check_wall_collide(head, board.walls)
+    || player.check_self_collide(head, board.snek)
+  let score_increase = case game_over, ate {
+    False, True -> 200
+    _, _ -> 0
+  }
+  let new_board = Board(..board, snek: snek, food: new_food)
   case game_over {
     True -> Model(..model, board: new_board, state: GameOver)
     False ->
@@ -267,51 +265,6 @@ fn move(model: Model, prev_mv: Move, mv: Move) -> Model {
         state: Play(mv_taken, mv_taken),
       )
   }
-}
-
-fn move_snek(board: Board, prev_mv: Move, mv: Move) -> #(Board, Bool, Int, Move) {
-  case board.snek.body {
-    [head, ..body] -> {
-      let #(head, mv_taken) = new_head(head, body, prev_mv, mv)
-      let #(new_food, ate) = update_food(head, board.food)
-      let new_food = add_random_food(head, board, new_food)
-      let snek = {
-        let food = int.max(0, board.snek.food - 1)
-        let food = case ate {
-          True -> food + 2
-          False -> food
-        }
-        case board.snek.food > 0 {
-          True -> {
-            let body = board.snek.body
-            Snek([head, ..body], food)
-          }
-          False -> {
-            let body = drop_last(board.snek.body)
-            Snek([head, ..body], food)
-          }
-        }
-      }
-      let game_over =
-        check_collide(head, board.w, board.h)
-        || check_wall_collide(head, board.walls)
-        || check_self_collide(head, board.snek)
-      let score = case game_over, ate {
-        False, True -> 200
-        _, _ -> 0
-      }
-      #(Board(..board, snek: snek, food: new_food), game_over, score, mv_taken)
-    }
-    _ -> #(board, True, 0, mv)
-  }
-}
-
-fn check_self_collide(head: Pos, snek: Snek) -> Bool {
-  let body = case snek.food > 0 {
-    True -> snek.body
-    False -> drop_last(snek.body)
-  }
-  list.contains(body, head)
 }
 
 fn check_wall_collide(head: Pos, walls: List(Pos)) -> Bool {
@@ -333,17 +286,17 @@ fn add_random_food(head: Pos, board: Board, food: Set(Pos)) -> Set(Pos) {
   case int.random(5) {
     0 -> {
       let p = random_pos(w, h)
-      case head == p || body_contains(snek, p) || check_wall_collide(p, walls) {
+      case
+        head == p
+        || player.body_contains(snek, p)
+        || check_wall_collide(p, walls)
+      {
         True -> food
         False -> set.insert(food, p)
       }
     }
     _ -> food
   }
-}
-
-fn body_contains(snek: Snek, pos: Pos) -> Bool {
-  list.contains(snek.body, pos)
 }
 
 fn random_pos(w: Int, h: Int) -> Pos {
@@ -382,18 +335,6 @@ fn new_head(head: Pos, body: List(Pos), prev_mv: Move, mv: Move) -> #(Pos, Move)
       #(head, prev_mv)
     }
     False -> #(head1, mv)
-  }
-}
-
-fn drop_last(xs: List(v)) -> List(v) {
-  xs |> drop_last_recursive([]) |> list.reverse
-}
-
-fn drop_last_recursive(xs: List(v), acc: List(v)) -> List(v) {
-  case xs {
-    [x, _] -> [x, ..acc]
-    [x, ..rest] -> drop_last_recursive(rest, [x, ..acc])
-    _ -> acc
   }
 }
 

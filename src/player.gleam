@@ -1,13 +1,14 @@
 import gleam/int
 import gleam/list
-import position.{type Move, type Pos, Down, Left, Pos, Right, Up}
+import gleam/set.{type Set}
+import position.{type Move, type Pos, Pos}
 
 pub type Snek {
-  Snek(body: List(Pos), dir: Move, food: Int)
+  Snek(body: List(Pos), input: Input, dir: Move, food: Int)
 }
 
 pub fn init(p: Pos, dir: Move) -> Snek {
-  Snek(body: [p, p, p], dir: dir, food: 0)
+  Snek(body: [p, p, p], input: None, dir: dir, food: 0)
 }
 
 pub fn head(snek: Snek) -> Pos {
@@ -17,23 +18,87 @@ pub fn head(snek: Snek) -> Pos {
   }
 }
 
-pub fn neck(snek: Snek) -> Pos {
+fn neck(snek: Snek) -> Pos {
   case snek.body {
     [_, neck, ..] -> neck
     _ -> panic as "Snek has no neck"
   }
 }
 
-pub fn new_head(snek: Snek, prev_mv: Move, mv: Move) -> #(Pos, Move) {
-  let head1 = position.move(head(snek), mv)
-  let collide = neck(snek) == head1
-  case collide {
-    True -> #(position.move(head(snek), prev_mv), prev_mv)
-    False -> #(head1, mv)
+pub fn move(
+  snek: Snek,
+  food: Set(Pos),
+  walls: List(Pos),
+  w: Int,
+  h: Int,
+) -> #(Snek, Bool, Bool) {
+  let #(head, new_input, mv_taken) = new_head(snek)
+  let ate = set.contains(food, head)
+  let new_snek = update(snek, head, mv_taken, ate)
+  let game_over =
+    check_out_of_boards(head, w, h)
+    || list.contains(walls, head)
+    || check_self_collide(head, snek)
+  #(Snek(..new_snek, input: new_input), game_over, ate)
+}
+
+fn check_out_of_boards(head: Pos, w: Int, h: Int) -> Bool {
+  case head {
+    Pos(x, _) if x < 0 -> True
+    Pos(x, _) if x >= w -> True
+    Pos(_, y) if y < 0 -> True
+    Pos(_, y) if y >= h -> True
+    _ -> False
   }
 }
 
-pub fn update(snek: Snek, new_head: Pos, move: Move, ate: Bool) -> Snek {
+pub type Input {
+  None
+  One(Move)
+  Future(Move)
+  Double(Move, Move)
+}
+
+pub fn keypress(snek: Snek, move: Move) -> Snek {
+  let new = case snek.input {
+    None -> One(move)
+    One(prev_mv) -> Double(prev_mv, move)
+    Future(mv) -> Double(mv, move)
+    Double(_mv1, mv2) -> Double(mv2, move)
+  }
+  Snek(..snek, input: new)
+}
+
+fn new_head(snek: Snek) -> #(Pos, Input, Move) {
+  case snek.input {
+    None -> {
+      #(position.move(head(snek), snek.dir), snek.input, snek.dir)
+    }
+    One(mv) -> {
+      let head1 = position.move(head(snek), mv)
+      case neck(snek) == head1 {
+        True -> #(position.move(head(snek), snek.dir), None, snek.dir)
+        False -> #(head1, None, mv)
+      }
+    }
+    Future(mv) -> {
+      let head1 = position.move(head(snek), mv)
+      case neck(snek) == head1 {
+        True -> #(position.move(head(snek), snek.dir), None, snek.dir)
+        False -> #(head1, None, mv)
+      }
+    }
+    Double(mv1, mv2) -> {
+      let head1 = position.move(head(snek), mv2)
+      case neck(snek) == head1 {
+        True -> #(position.move(head(snek), mv1), Future(mv2), mv1)
+        False -> #(head1, None, mv2)
+      }
+    }
+  }
+}
+
+fn update(snek: Snek, new_head: Pos, move: Move, ate: Bool) -> Snek {
   let food = int.max(0, snek.food - 1)
   let food = case ate {
     True -> food + 2
@@ -42,16 +107,16 @@ pub fn update(snek: Snek, new_head: Pos, move: Move, ate: Bool) -> Snek {
   case snek.food > 0 {
     True -> {
       let body = snek.body
-      Snek([new_head, ..body], move, food)
+      Snek([new_head, ..body], snek.input, move, food)
     }
     False -> {
       let body = drop_last(snek.body)
-      Snek([new_head, ..body], move, food)
+      Snek([new_head, ..body], snek.input, move, food)
     }
   }
 }
 
-pub fn check_self_collide(head: Pos, snek: Snek) -> Bool {
+fn check_self_collide(head: Pos, snek: Snek) -> Bool {
   let body = case snek.food > 0 {
     True -> snek.body
     False -> drop_last(snek.body)

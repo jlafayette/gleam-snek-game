@@ -11,9 +11,8 @@ import lustre/element.{text}
 import lustre/element/html
 import lustre/element/svg
 
-// import input.{type Input}
 import player.{type Snek, Snek}
-import position.{type Move, type Pos, Down, Left, Pos, Right, Up}
+import position.{type Pos, Down, Left, Pos, Right, Up}
 
 // --- Main 
 
@@ -63,8 +62,8 @@ type Board {
 
 type GameState {
   Menu
-  Play(Move, Move)
-  Pause(Move, Move)
+  Play
+  Pause
   GameOver
 }
 
@@ -136,11 +135,11 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     Menu -> {
       update_menu(model, msg)
     }
-    Play(prev_mv, mv) -> {
-      update_play(model, msg, prev_mv, mv)
+    Play -> {
+      update_play(model, msg)
     }
-    Pause(prev_mv, mv) -> {
-      update_pause(model, msg, prev_mv, mv)
+    Pause -> {
+      update_pause(model, msg)
     }
     GameOver -> {
       update_game_over(model, msg)
@@ -151,7 +150,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 fn update_menu(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) if str == "Space" -> #(
-      Model(..model, state: Play(Right, Right), keydown: str),
+      Model(..model, state: Play, keydown: str),
       every(model.tick_speed, Tick),
     )
     Keydown(str) -> #(Model(..model, keydown: str), effect.none())
@@ -159,30 +158,36 @@ fn update_menu(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   }
 }
 
-fn update_play(
-  model: Model,
-  msg: Msg,
-  prev_mv: Move,
-  mv: Move,
-) -> #(Model, effect.Effect(Msg)) {
+fn update_play(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) -> {
-      let state = case str {
-        "KeyW" | "ArrowUp" -> Play(prev_mv, Up)
-        "KeyA" | "ArrowLeft" -> Play(prev_mv, Left)
-        "KeyS" | "ArrowDown" -> Play(prev_mv, Down)
-        "KeyD" | "ArrowRight" -> Play(prev_mv, Right)
+      let #(new_state, new_snek) = case str {
+        "KeyW" | "ArrowUp" -> #(Play, player.keypress(model.board.snek, Up))
+        "KeyA" | "ArrowLeft" -> #(Play, player.keypress(model.board.snek, Left))
+        "KeyS" | "ArrowDown" -> #(Play, player.keypress(model.board.snek, Down))
+        "KeyD" | "ArrowRight" -> #(
+          Play,
+          player.keypress(model.board.snek, Right),
+        )
         "Escape" | "Space" -> {
           let _ = window_clear_interval()
-          Pause(prev_mv, mv)
+          #(Pause, model.board.snek)
         }
-        _ -> Play(prev_mv, mv)
+        _ -> #(Play, model.board.snek)
       }
-      #(Model(..model, keydown: str, state: state), effect.none())
+      #(
+        Model(
+          ..model,
+          board: Board(..model.board, snek: new_snek),
+          keydown: str,
+          state: new_state,
+        ),
+        effect.none(),
+      )
     }
     Tick -> {
       io.debug("tick")
-      #(move(model, prev_mv, mv), effect.none())
+      #(move(model), effect.none())
     }
     TickStart(ms) -> {
       io.debug("tick-start")
@@ -196,18 +201,13 @@ fn update_play(
   }
 }
 
-fn update_pause(
-  model: Model,
-  msg: Msg,
-  prev_mv: Move,
-  mv: Move,
-) -> #(Model, effect.Effect(Msg)) {
+fn update_pause(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) -> {
       case str {
         "Escape" | "Space" -> {
           #(
-            Model(..model, keydown: str, state: Play(prev_mv, mv)),
+            Model(..model, keydown: str, state: Play),
             every(model.tick_speed, Tick),
           )
         }
@@ -224,12 +224,7 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       case str {
         "Space" -> {
           #(
-            Model(
-              ..model,
-              board: init_board(),
-              keydown: str,
-              state: Play(Right, Right),
-            ),
+            Model(..model, board: init_board(), keydown: str, state: Play),
             every(model.tick_speed, Tick),
           )
         }
@@ -240,16 +235,12 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   }
 }
 
-fn move(model: Model, prev_mv: Move, mv: Move) -> Model {
+fn move(model: Model) -> Model {
   let board = model.board
-  let #(head, mv_taken) = player.new_head(model.board.snek, prev_mv, mv)
-  let #(new_food, ate) = update_food(head, board.food)
-  let new_food = add_random_food(head, board, new_food)
-  let snek = player.update(board.snek, head, mv_taken, ate)
-  let game_over =
-    check_collide(head, board.w, board.h)
-    || check_wall_collide(head, board.walls)
-    || player.check_self_collide(head, board.snek)
+  let #(snek, game_over, ate) =
+    player.move(model.board.snek, board.food, board.walls, board.w, board.h)
+  let new_food = set.delete(board.food, player.head(snek))
+  let new_food = add_random_food(player.head(snek), board, new_food)
   let score_increase = case game_over, ate {
     False, True -> 200
     _, _ -> 0
@@ -262,20 +253,9 @@ fn move(model: Model, prev_mv: Move, mv: Move) -> Model {
         ..model,
         board: new_board,
         score: model.score + score_increase,
-        state: Play(mv_taken, mv_taken),
+        state: Play,
       )
   }
-}
-
-fn check_wall_collide(head: Pos, walls: List(Pos)) -> Bool {
-  list.contains(walls, head)
-}
-
-fn update_food(head: Pos, food: Set(Pos)) -> #(Set(Pos), Bool) {
-  let len1 = set.size(food)
-  let food2 = set.delete(food, head)
-  let len2 = set.size(food2)
-  #(food2, len1 > len2)
 }
 
 fn add_random_food(head: Pos, board: Board, food: Set(Pos)) -> Set(Pos) {
@@ -289,7 +269,7 @@ fn add_random_food(head: Pos, board: Board, food: Set(Pos)) -> Set(Pos) {
       case
         head == p
         || player.body_contains(snek, p)
-        || check_wall_collide(p, walls)
+        || list.contains(walls, p)
       {
         True -> food
         False -> set.insert(food, p)
@@ -301,41 +281,6 @@ fn add_random_food(head: Pos, board: Board, food: Set(Pos)) -> Set(Pos) {
 
 fn random_pos(w: Int, h: Int) -> Pos {
   Pos(int.random(w), int.random(h))
-}
-
-fn check_collide(head: Pos, w: Int, h: Int) -> Bool {
-  case head {
-    Pos(x, _) if x < 0 -> True
-    Pos(x, _) if x >= w -> True
-    Pos(_, y) if y < 0 -> True
-    Pos(_, y) if y >= h -> True
-    _ -> False
-  }
-}
-
-fn new_head(head: Pos, body: List(Pos), prev_mv: Move, mv: Move) -> #(Pos, Move) {
-  let head1 = case mv {
-    Left -> Pos(head.x - 1, head.y)
-    Right -> Pos(head.x + 1, head.y)
-    Down -> Pos(head.x, head.y + 1)
-    Up -> Pos(head.x, head.y - 1)
-  }
-  let collide = case body {
-    [neck, ..] -> head1 == neck
-    _ -> False
-  }
-  case collide {
-    True -> {
-      let head = case prev_mv {
-        Left -> Pos(head.x - 1, head.y)
-        Right -> Pos(head.x + 1, head.y)
-        Down -> Pos(head.x, head.y + 1)
-        Up -> Pos(head.x, head.y - 1)
-      }
-      #(head, prev_mv)
-    }
-    False -> #(head1, mv)
-  }
 }
 
 // --- View
@@ -363,8 +308,8 @@ fn view(model: Model) {
         ]),
       ]
     }
-    Play(_, _) -> [grid(model.board, model.score)]
-    Pause(_, _) -> {
+    Play -> [grid(model.board, model.score)]
+    Pause -> {
       [
         grid(model.board, model.score),
         html.div([class("pause-mask")], [

@@ -239,15 +239,14 @@ fn move(model: Model) -> Model {
   let board = model.board
   let #(snek, game_over, ate) =
     player.move(model.board.snek, board.food, board.walls, board.w, board.h)
-  let new_food = set.delete(board.food, player.head(snek))
-  let new_food = add_random_food(player.head(snek), board, new_food)
+  let new_food = update_food(board)
   let score_increase = case game_over, ate {
     False, True -> 200
     _, _ -> 0
   }
   let new_board = Board(..board, snek: snek, food: new_food)
   case game_over {
-    True -> Model(..model, board: new_board, state: GameOver)
+    True -> Model(..model, score: 0, board: new_board, state: GameOver)
     False ->
       Model(
         ..model,
@@ -256,6 +255,12 @@ fn move(model: Model) -> Model {
         state: Play,
       )
   }
+}
+
+fn update_food(board: Board) -> Set(Pos) {
+  let head = player.head(board.snek)
+  let food = set.delete(board.food, head)
+  add_random_food(head, board, food)
 }
 
 fn add_random_food(head: Pos, board: Board, food: Set(Pos)) -> Set(Pos) {

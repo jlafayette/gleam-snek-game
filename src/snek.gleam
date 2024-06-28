@@ -72,13 +72,20 @@ type GameState {
   Menu
   Play
   Pause
+  Died
   GameOver
+}
+
+const max_lives = 3
+
+type Run {
+  Run(score: Int, lives: Int)
 }
 
 type Model {
   Model(
     board: Board,
-    score: Int,
+    run: Run,
     tick_speed: Int,
     state: GameState,
     keydown: String,
@@ -89,7 +96,7 @@ fn init(_flags) -> #(Model, effect.Effect(Msg)) {
   #(
     Model(
       board: init_board(1),
-      score: 0,
+      run: Run(score: 0, lives: max_lives),
       tick_speed: 250,
       state: Menu,
       keydown: "N/A",
@@ -140,6 +147,9 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     }
     Pause -> {
       update_pause(model, msg)
+    }
+    Died -> {
+      update_died(model, msg)
     }
     GameOver -> {
       update_game_over(model, msg)
@@ -232,13 +242,41 @@ fn update_pause(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   }
 }
 
+fn update_died(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
+  case msg {
+    Keydown(str) -> {
+      case str {
+        "Space" -> {
+          #(
+            Model(
+              ..model,
+              board: init_board(model.board.level.number),
+              keydown: str,
+              state: Play,
+            ),
+            every(model.tick_speed, Tick),
+          )
+        }
+        _ -> #(Model(..model, keydown: str), effect.none())
+      }
+    }
+    _ -> #(model, effect.none())
+  }
+}
+
 fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) -> {
       case str {
         "Space" -> {
           #(
-            Model(..model, board: init_board(1), keydown: str, state: Play),
+            Model(
+              ..model,
+              run: Run(score: 0, lives: max_lives),
+              board: init_board(1),
+              keydown: str,
+              state: Play,
+            ),
             every(model.tick_speed, Tick),
           )
         }
@@ -266,12 +304,30 @@ fn move(model: Model) -> Model {
   }
   let new_board = Board(..board, snek: snek, food: new_food)
   case game_over {
-    True -> Model(..model, score: 0, board: new_board, state: GameOver)
+    True -> {
+      let lives = model.run.lives - 1
+      case lives == 0 {
+        True ->
+          Model(
+            ..model,
+            run: Run(..model.run, lives: lives),
+            board: new_board,
+            state: GameOver,
+          )
+        False ->
+          Model(
+            ..model,
+            run: Run(..model.run, lives: lives),
+            board: new_board,
+            state: Died,
+          )
+      }
+    }
     False ->
       Model(
         ..model,
         board: new_board,
-        score: model.score + score_increase,
+        run: Run(..model.run, score: model.run.score + score_increase),
         state: Play,
       )
   }
@@ -333,10 +389,10 @@ fn view(model: Model) {
         ]),
       ]
     }
-    Play -> [grid(model.board, model.score)]
+    Play -> [grid(model.board, model.run)]
     Pause -> {
       [
-        grid(model.board, model.score),
+        grid(model.board, model.run),
         html.div([class("pause-mask")], [
           html.div([class("pause-box")], [
             html.h3([class("pause-header"), menu_font_class()], [text("PAUSED")]),
@@ -347,9 +403,24 @@ fn view(model: Model) {
         ]),
       ]
     }
+    Died -> {
+      [
+        grid(model.board, model.run),
+        html.div([class("pause-mask")], [
+          html.div([class("pause-box")], [
+            html.h3([class("pause-header"), menu_font_class()], [
+              text("Remaining Lives: " <> int.to_string(model.run.lives)),
+            ]),
+            html.p([class("pause-text"), menu_font_class()], [
+              text("Press 'SPACE' to restart level"),
+            ]),
+          ]),
+        ]),
+      ]
+    }
     GameOver -> {
       [
-        grid(model.board, model.score),
+        grid(model.board, model.run),
         html.div([class("pause-mask")], [
           html.div([class("pause-box")], [
             html.h3([class("pause-header"), menu_font_class()], [
@@ -385,7 +456,7 @@ fn int_fraction(n: Int, mult: Float) -> Int {
   int.to_float(n) *. mult |> float.round
 }
 
-fn grid(board: Board, score: Int) {
+fn grid(board: Board, run: Run) {
   let size = board.size
   let offset = Pos(0, size)
   let w = board.w * size + offset.x
@@ -489,7 +560,16 @@ fn grid(board: Board, score: Int) {
             attr_str("class", "share-tech-mono-regular"),
             attr_str("class", "pause-text"),
           ],
-          "score:" <> int.to_string(score),
+          "score:" <> int.to_string(run.score),
+        ),
+        svg.text(
+          [
+            attr("x", 120),
+            attr("y", offset.y - 12),
+            attr_str("class", "share-tech-mono-regular"),
+            attr_str("class", "pause-text"),
+          ],
+          "lives:" <> int.to_string(run.lives),
         ),
       ]),
       // borders

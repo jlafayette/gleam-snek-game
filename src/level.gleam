@@ -1,8 +1,13 @@
+import gleam/int
 import gleam/list
-import position.{type Move, type Pos, Down, Left, Pos, Right, Up}
+import position.{type Move, type Pos, Pos, Right, Up}
 
 pub type Level {
   Level(number: Int, snek_pos: Pos, snek_dir: Move, walls: List(Pos))
+}
+
+pub fn clamp(n: Int) -> Int {
+  int.clamp(n, 1, 3)
 }
 
 pub fn get(n: Int, w: Int, h: Int) -> Level {

@@ -11,7 +11,7 @@ import lustre/element.{text}
 import lustre/element/html
 import lustre/element/svg
 
-import level
+import level as level_gen
 import player.{type Snek, Snek}
 import position.{type Pos, Down, Left, Pos, Right, Up}
 
@@ -58,7 +58,14 @@ fn window_clear_interval() -> Nil
 // --- Model
 
 type Board {
-  Board(food: Set(Pos), snek: Snek, walls: List(Pos), w: Int, h: Int, size: Int)
+  Board(
+    level: level_gen.Level,
+    food: Set(Pos),
+    snek: Snek,
+    w: Int,
+    h: Int,
+    size: Int,
+  )
 }
 
 type GameState {
@@ -79,18 +86,27 @@ type Model {
 }
 
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
-  #(Model(init_board(), 0, 250, Menu, "N/A"), effect.none())
+  #(
+    Model(
+      board: init_board(1),
+      score: 0,
+      tick_speed: 250,
+      state: Menu,
+      keydown: "N/A",
+    ),
+    effect.none(),
+  )
 }
 
-fn init_board() -> Board {
+fn init_board(level_number: Int) -> Board {
   let width = 20
   let height = 15
   let tile_size = 40
-  let level = level.get(3, width, height)
+  let level = level_gen.get(level_number, width, height)
   Board(
+    level,
     init_food([level.snek_pos, ..level.walls], width, height),
     player.init(level.snek_pos, level.snek_dir),
-    level.walls,
     width,
     height,
     tile_size,
@@ -145,6 +161,12 @@ fn update_menu(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 fn update_play(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) -> {
+      let level_num = model.board.level.number
+      let new_level = case str {
+        "Comma" -> level_gen.clamp(level_num - 1)
+        "Period" -> level_gen.clamp(level_num + 1)
+        _ -> level_num
+      }
       let #(new_state, new_snek) = case str {
         "KeyW" | "ArrowUp" -> #(Play, player.keypress(model.board.snek, Up))
         "KeyA" | "ArrowLeft" -> #(Play, player.keypress(model.board.snek, Left))
@@ -159,15 +181,23 @@ fn update_play(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         }
         _ -> #(Play, model.board.snek)
       }
-      #(
-        Model(
-          ..model,
-          board: Board(..model.board, snek: new_snek),
-          keydown: str,
-          state: new_state,
-        ),
-        effect.none(),
-      )
+      case new_level == level_num {
+        False -> {
+          #(
+            Model(..model, board: init_board(new_level), keydown: str),
+            effect.none(),
+          )
+        }
+        True -> #(
+          Model(
+            ..model,
+            board: Board(..model.board, snek: new_snek),
+            keydown: str,
+            state: new_state,
+          ),
+          effect.none(),
+        )
+      }
     }
     Tick -> {
       io.debug("tick")
@@ -208,7 +238,7 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       case str {
         "Space" -> {
           #(
-            Model(..model, board: init_board(), keydown: str, state: Play),
+            Model(..model, board: init_board(1), keydown: str, state: Play),
             every(model.tick_speed, Tick),
           )
         }
@@ -219,16 +249,16 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   }
 }
 
-fn reset_board(board: Board, lvl: Int) -> Board {
-  // let level =  get_level.get(lvl)
-  // Board(..board, snek: player.init(pos, Right))
-  todo
-}
-
 fn move(model: Model) -> Model {
   let board = model.board
   let #(snek, game_over, ate) =
-    player.move(model.board.snek, board.food, board.walls, board.w, board.h)
+    player.move(
+      model.board.snek,
+      board.food,
+      board.level.walls,
+      board.w,
+      board.h,
+    )
   let new_food = update_food(board)
   let score_increase = case game_over, ate {
     False, True -> 200
@@ -257,7 +287,7 @@ fn add_random_food(head: Pos, board: Board, food: Set(Pos)) -> Set(Pos) {
   let w = board.w
   let h = board.h
   let snek = board.snek
-  let walls = board.walls
+  let walls = board.level.walls
   case int.random(5) {
     0 -> {
       let p = random_pos(w, h)
@@ -432,7 +462,7 @@ fn grid(board: Board, score: Int) {
       // walls
       svg.g(
         [attr_str("fill", color.background()), attr("strok-width", 0)],
-        board.walls
+        board.level.walls
           |> list.map(fn(pos) {
             svg.rect([
               attr("x", pos.x * size + offset.x),

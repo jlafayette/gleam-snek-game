@@ -11,6 +11,7 @@ import lustre/element.{text}
 import lustre/element/html
 import lustre/element/svg
 
+import level
 import player.{type Snek, Snek}
 import position.{type Pos, Down, Left, Pos, Right, Up}
 
@@ -85,13 +86,11 @@ fn init_board() -> Board {
   let width = 20
   let height = 15
   let tile_size = 40
-  let level = 2
-  let #(walls, snek_init_pos) = init_walls(level, width, height)
-  let dir = Right
+  let level = level.get(3, width, height)
   Board(
-    init_food([snek_init_pos, ..walls], width, height),
-    player.init(snek_init_pos, dir),
-    walls,
+    init_food([level.snek_pos, ..level.walls], width, height),
+    player.init(level.snek_pos, level.snek_dir),
+    level.walls,
     width,
     height,
     tile_size,
@@ -103,21 +102,6 @@ fn init_food(exclude: List(Pos), w: Int, h: Int) -> Set(Pos) {
   case list.contains(exclude, f) {
     True -> init_food(exclude, w, h)
     False -> set.from_list([f])
-  }
-}
-
-fn init_walls(level: Int, w: Int, h: Int) -> #(List(Pos), Pos) {
-  case level {
-    1 -> #([], Pos(w / 2, h / 2))
-    2 -> {
-      let wall_h = h / 2
-      let gap = 3
-      let walls =
-        list.range(gap, w - gap - 1)
-        |> list.map(fn(x) { Pos(x, wall_h) })
-      #(walls, Pos(w / 4, h / 4))
-    }
-    _ -> #([], Pos(w / 2, h / 2))
   }
 }
 
@@ -233,6 +217,12 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     }
     _ -> #(model, effect.none())
   }
+}
+
+fn reset_board(board: Board, lvl: Int) -> Board {
+  // let level =  get_level.get(lvl)
+  // Board(..board, snek: player.init(pos, Right))
+  todo
 }
 
 fn move(model: Model) -> Model {

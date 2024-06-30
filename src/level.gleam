@@ -5,7 +5,16 @@ import gleam/string
 import position.{type Move, type Pos, Down, Left, Pos, Right, Up}
 
 pub type Level {
-  Level(number: Int, snek_pos: Pos, snek_dir: Move, walls: List(Pos))
+  Level(
+    number: Int,
+    snek_pos: Pos,
+    snek_dir: Move,
+    walls: List(Pos),
+    exit: Pos,
+    exit_revealed: Bool,
+    score: Int,
+    eaten: Int,
+  )
 }
 
 const lvl_1 = "
@@ -16,7 +25,7 @@ const lvl_1 = "
 ....................
 ....................
 ....................
-.....S>.............
+.....S>............E
 ....................
 ....................
 ....................
@@ -41,7 +50,7 @@ const lvl_2 = "
 ....................
 ....................
 ....................
-....................
+..........E.........
 "
 
 const lvl_3 = "
@@ -49,7 +58,7 @@ const lvl_3 = "
 ....................
 .....W........W.....
 .....W........W.....
-.....W........W.....
+.....W........W....E
 .....W........W.....
 .....W........W.....
 .....W........W.....
@@ -76,7 +85,7 @@ const lvl_4 = "
 ....................
 ..WWWWWWWWWWWW......
 ....................
-....................
+...................E
 ....................
 "
 
@@ -88,7 +97,7 @@ const lvl_5 = "
 ....................
 ...W............W...
 ...W............W...
-...W............W...
+...W............W..E
 ...W............W...
 ...W............W...
 ....................
@@ -102,17 +111,19 @@ type Item {
   Wall(Pos)
   SnekInit(Pos)
   Dir(Move)
+  Exit(Pos)
   Empty
 }
 
 type Acc =
-  #(List(Pos), Option(Pos), Option(Move))
+  #(List(Pos), Option(Pos), Option(Move), Option(Pos))
 
 fn collect_items(acc: Acc, item: Item) -> Acc {
   case item {
-    Wall(pos) -> #([pos, ..acc.0], acc.1, acc.2)
-    SnekInit(pos) -> #(acc.0, Some(pos), acc.2)
-    Dir(move) -> #(acc.0, acc.1, Some(move))
+    Wall(pos) -> #([pos, ..acc.0], acc.1, acc.2, acc.3)
+    SnekInit(pos) -> #(acc.0, Some(pos), acc.2, acc.3)
+    Dir(move) -> #(acc.0, acc.1, Some(move), acc.3)
+    Exit(pos) -> #(acc.0, acc.1, acc.2, Some(pos))
     _ -> acc
   }
 }
@@ -129,6 +140,7 @@ fn read_row(row: #(String, Int)) -> List(Item) {
       ">" -> Dir(Right)
       "<" -> Dir(Left)
       "v" | "V" -> Dir(Down)
+      "E" | "e" -> Exit(Pos(x, y))
       _ -> Empty
     }
   })
@@ -143,9 +155,22 @@ fn read(n: Int, lvl: String) -> Level {
     |> list.map2(list.range(0, 100), fn(line, y) { #(line, y) })
     |> list.map(fn(row) { read_row(row) })
     |> list.flatten
-    |> list.fold(#([], Some(Pos(0, 0)), Some(Right)), collect_items)
+    |> list.fold(
+      #([], Some(Pos(0, 0)), Some(Right), Some(Pos(0, 0))),
+      collect_items,
+    )
   case acc {
-    #(walls, Some(init_pos), Some(dir)) -> Level(n, init_pos, dir, walls)
+    #(walls, Some(init_pos), Some(dir), Some(exit)) ->
+      Level(
+        number: n,
+        snek_pos: init_pos,
+        snek_dir: dir,
+        walls: walls,
+        exit: exit,
+        exit_revealed: False,
+        score: 0,
+        eaten: 0,
+      )
     _ -> panic as "Bad level data"
   }
 }
@@ -162,5 +187,20 @@ pub fn get(n: Int, w: Int, h: Int) -> Level {
     4 -> read(4, lvl_4)
     5 -> read(5, lvl_5)
     _ -> get(1, w, h)
+  }
+}
+
+pub fn score(lvl: Level, increase: Int) -> Level {
+  case increase > 0 {
+    True -> {
+      let exit_revealed = lvl.eaten >= 9
+      Level(
+        ..lvl,
+        score: lvl.score + increase,
+        eaten: lvl.eaten + 1,
+        exit_revealed: exit_revealed,
+      )
+    }
+    False -> lvl
   }
 }

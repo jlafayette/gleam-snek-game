@@ -299,10 +299,16 @@ fn move(model: Model) -> Model {
     )
   let new_food = update_food(board)
   let score_increase = case game_over, ate {
-    False, True -> 200
+    False, True -> 1
     _, _ -> 0
   }
-  let new_board = Board(..board, snek: snek, food: new_food)
+  let new_board =
+    Board(
+      ..board,
+      snek: snek,
+      food: new_food,
+      level: level_gen.score(board.level, score_increase),
+    )
   case game_over {
     True -> {
       let lives = model.run.lives - 1
@@ -327,7 +333,7 @@ fn move(model: Model) -> Model {
       Model(
         ..model,
         board: new_board,
-        run: Run(..model.run, score: model.run.score + score_increase),
+        run: Run(..model.run, score: model.run.score),
         state: Play,
       )
   }
@@ -543,6 +549,23 @@ fn grid(board: Board, run: Run) {
             ])
           }),
       ),
+      // exit
+      svg.g([attr_str("fill", "green"), attr("strok-width", 0)], {
+        case board.level.exit_revealed {
+          True -> {
+            let pos = board.level.exit
+            [
+              svg.rect([
+                attr("x", pos.x * size + offset.x),
+                attr("y", pos.y * size + offset.y),
+                attr("width", size),
+                attr("height", size),
+              ]),
+            ]
+          }
+          False -> []
+        }
+      }),
       // menu bar
       svg.g([attr("stroke-width", 0), attr_str("fill", color.background())], [
         svg.rect([
@@ -560,7 +583,11 @@ fn grid(board: Board, run: Run) {
             attr_str("class", "share-tech-mono-regular"),
             attr_str("class", "pause-text"),
           ],
-          "score:" <> int.to_string(run.score),
+          "score:"
+            <> int.to_string(run.score + board.level.score)
+            <> "("
+            <> int.to_string(board.level.score)
+            <> ")",
         ),
         svg.text(
           [

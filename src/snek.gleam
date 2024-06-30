@@ -3,6 +3,7 @@ import gleam/float
 import gleam/int
 import gleam/io
 import gleam/list
+import gleam/option.{None, Some}
 import gleam/set.{type Set}
 import lustre
 import lustre/attribute
@@ -289,27 +290,32 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 
 fn move(model: Model) -> Model {
   let board = model.board
-  let #(snek, game_over, ate) =
+  let exit = case board.level.exit_revealed {
+    True -> Some(board.level.exit)
+    False -> None
+  }
+  let result =
     player.move(
       model.board.snek,
       board.food,
       board.level.walls,
+      exit,
       board.w,
       board.h,
     )
   let new_food = update_food(board)
-  let score_increase = case game_over, ate {
+  let score_increase = case result.died, result.ate {
     False, True -> 1
     _, _ -> 0
   }
   let new_board =
     Board(
       ..board,
-      snek: snek,
+      snek: result.snek,
       food: new_food,
       level: level_gen.score(board.level, score_increase),
     )
-  case game_over {
+  case result.died {
     True -> {
       let lives = model.run.lives - 1
       case lives == 0 {
@@ -329,13 +335,22 @@ fn move(model: Model) -> Model {
           )
       }
     }
-    False ->
-      Model(
-        ..model,
-        board: new_board,
-        run: Run(..model.run, score: model.run.score),
-        state: Play,
-      )
+    False -> {
+      case result.exit {
+        True -> {
+          // score points
+          // move to next level
+          let score = model.run.score + model.board.level.score
+          let new_level = model.board.level.number + 1
+          Model(
+            ..model,
+            run: Run(..model.run, score: score),
+            board: init_board(new_level),
+          )
+        }
+        False -> Model(..model, board: new_board, state: Play)
+      }
+    }
   }
 }
 

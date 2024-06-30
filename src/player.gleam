@@ -1,5 +1,6 @@
 import gleam/int
 import gleam/list
+import gleam/option.{type Option}
 import gleam/set.{type Set}
 import position.{type Move, type Pos, Pos}
 
@@ -25,13 +26,18 @@ fn neck(snek: Snek) -> Pos {
   }
 }
 
+pub type Result {
+  Result(snek: Snek, died: Bool, exit: Bool, ate: Bool)
+}
+
 pub fn move(
   snek: Snek,
   food: Set(Pos),
   walls: List(Pos),
+  exit_pos: Option(Pos),
   w: Int,
   h: Int,
-) -> #(Snek, Bool, Bool) {
+) -> Result {
   let #(head, new_input, mv_taken) = new_head(snek)
   let ate = set.contains(food, head)
   let new_snek = update(snek, head, mv_taken, ate)
@@ -39,7 +45,16 @@ pub fn move(
     check_out_of_boards(head, w, h)
     || list.contains(walls, head)
     || check_self_collide(head, snek)
-  #(Snek(..new_snek, input: new_input), game_over, ate)
+  let exit = case exit_pos {
+    option.Some(pos) -> pos == head
+    option.None -> False
+  }
+  Result(
+    snek: Snek(..new_snek, input: new_input),
+    died: game_over,
+    ate: ate,
+    exit: exit,
+  )
 }
 
 fn check_out_of_boards(head: Pos, w: Int, h: Int) -> Bool {

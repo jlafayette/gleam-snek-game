@@ -8,12 +8,17 @@ pub fn background() {
 
 // #0f0b19
 pub fn grid_border() {
-  hsl(257, 39, 7)
+  hsl(257, 39, 60)
+}
+
+pub fn game_outline() {
+  hsl(257, 39, 60)
 }
 
 // #393939
 pub fn grid_background() {
-  hsl(0, 0, 22)
+  hsl(257, 39, 7)
+  // hsl(0, 0, 22)
 }
 
 pub const grid_lines = grid_border

@@ -96,7 +96,7 @@ type Model {
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
   #(
     Model(
-      board: init_board(1),
+      board: init_board(2),
       run: Run(score: 0, lives: max_lives),
       tick_speed: 250,
       state: Menu,
@@ -395,20 +395,21 @@ fn menu_font_class() {
 fn view(model: Model) {
   html.div([class("fullscreen")], case model.state {
     Menu -> {
-      [
-        html.div([class("mask")], [
-          html.h1([class("game-header")], [text("Snek Game")]),
-          html.p([class("sub-header"), menu_font_class()], [
-            text("Press 'SPACE' to start"),
-          ]),
-          html.h3([class("controls-header"), menu_font_class()], [
-            text("Controls"),
-          ]),
-          html.p([class("controls-text"), menu_font_class()], [
-            text("Use WASD or arrow keys to move"),
-          ]),
-        ]),
-      ]
+      // [
+      //   html.div([class("mask")], [
+      //     html.h1([class("game-header")], [text("Snek Game")]),
+      //     html.p([class("sub-header"), menu_font_class()], [
+      //       text("Press 'SPACE' to start"),
+      //     ]),
+      //     html.h3([class("controls-header"), menu_font_class()], [
+      //       text("Controls"),
+      //     ]),
+      //     html.p([class("controls-text"), menu_font_class()], [
+      //       text("Use WASD or arrow keys to move"),
+      //     ]),
+      //   ]),
+      // ]
+      [grid(model.board, model.run)]
     }
     Play -> [grid(model.board, model.run)]
     Pause -> {
@@ -479,9 +480,12 @@ fn int_fraction(n: Int, mult: Float) -> Int {
 
 fn grid(board: Board, run: Run) {
   let size = board.size
-  let offset = Pos(0, size)
-  let w = board.w * size + offset.x
-  let h = board.h * size + offset.y
+  let offset = Pos(size / 2, size + size / 2)
+  let board_w = board.w * size
+  let board_h = board.h * size
+  let w = board_w + { offset.x * 2 }
+  let h = board_h + { offset.y + size / 2 }
+
   let half_size = size / 2
   let snek_width = int_fraction(size, 0.5)
   let food_radius = int_fraction(half_size, 0.5)
@@ -494,29 +498,60 @@ fn grid(board: Board, run: Run) {
       attr_str("version", "1.1"),
     ],
     [
-      // background
+      svg.defs([], [
+        svg.pattern(
+          [
+            attr_str("id", "pattern"),
+            attr("width", 8),
+            attr("height", 9),
+            attr_str("patternUnits", "userSpaceOnUse"),
+            attr_str("patternTransform", "rotate(45)"),
+          ],
+          [
+            svg.line([
+              attr_str("stroke", color.game_outline()),
+              attr_str("stroke-width", "5px"),
+              attr_str("y2", "4"),
+            ]),
+          ],
+        ),
+      ]),
       svg.rect([
+        attr_str("fill", "url(#pattern)"),
+        attr("x", 0),
+        attr("y", 0),
         attr("width", w),
         attr("height", h),
+        attr_str("stroke", "#a6a6a6"),
+      ]),
+      svg.rect([
+        attr("x", offset.x),
+        attr("y", offset.y),
+        attr("width", board_w),
+        attr("height", board_h),
         attr("stroke-width", 0),
         attr_str("fill", color.grid_background()),
       ]),
-      // vertical interior grid lines
+      // vertical grid lines
       svg.g(
         [attr_str("stroke", color.grid_lines())],
-        list.range(1, { w / size } - 1)
+        list.range(0, { w / size } - 1)
           |> list.map(fn(a) {
-            let x = a * size
-            line(x, size, x, h, grid_line_width)
+            let x = a * size + offset.x
+            let y1 = offset.y
+            let y2 = offset.y + board_h
+            line(x, y1, x, y2, grid_line_width)
           }),
       ),
-      // horizontal interior grid lines
+      // horizontal grid lines
       svg.g(
         [attr_str("stroke", color.grid_lines())],
-        list.range(1, { h / size } - 1)
+        list.range(0, { h / size } - 1)
           |> list.map(fn(a) {
+            let x1 = offset.x
             let y = a * size + offset.y
-            line(0, y, w, y, grid_line_width)
+            let x2 = offset.x + board_w
+            line(x1, y, x2, y, grid_line_width)
           }),
       ),
       // food
@@ -544,28 +579,30 @@ fn grid(board: Board, run: Run) {
             attr_str("stroke-linecap", "square"),
             // attr_str("stroke-linejoin", "round"),
             // attr_str("points", "20,20 20,60 60,60"),
-            attr_str(
-              "points",
-              snek_to_points(board.snek.body, size, Pos(0, size)),
-            ),
+            attr_str("points", snek_to_points(board.snek.body, size, offset)),
           ]),
         ],
       ),
       // walls
-      svg.g(
-        [attr_str("fill", color.background()), attr("strok-width", 0)],
-        board.level.walls
-          |> list.map(fn(pos) {
-            svg.rect([
-              attr("x", pos.x * size + offset.x),
-              attr("y", pos.y * size + offset.y),
-              attr("width", size),
-              attr("height", size),
-            ])
-          }),
-      ),
+      {
+        let wall_size = int_fraction(size, 0.8)
+        let center_offset = int_fraction(size, 0.1)
+        svg.g([attr_str("fill", color.grid_lines())], {
+          {
+            board.level.walls
+            |> list.map(fn(pos) {
+              svg.rect([
+                attr("x", pos.x * size + { offset.x + center_offset }),
+                attr("y", pos.y * size + { offset.y + center_offset }),
+                attr("width", wall_size),
+                attr("height", wall_size),
+              ])
+            })
+          }
+        })
+      },
       // exit
-      svg.g([attr_str("fill", "green"), attr("strok-width", 0)], {
+      svg.g([attr_str("fill", "green"), attr("stroke-width", 4)], {
         case board.level.exit_revealed {
           True -> {
             let pos = board.level.exit
@@ -594,7 +631,7 @@ fn grid(board: Board, run: Run) {
         svg.text(
           [
             attr("x", 8),
-            attr("y", offset.y - 12),
+            attr("y", size - 12),
             attr_str("class", "share-tech-mono-regular"),
             attr_str("class", "pause-text"),
           ],
@@ -607,7 +644,7 @@ fn grid(board: Board, run: Run) {
         svg.text(
           [
             attr("x", 120),
-            attr("y", offset.y - 12),
+            attr("y", size - 12),
             attr_str("class", "share-tech-mono-regular"),
             attr_str("class", "pause-text"),
           ],
@@ -615,9 +652,9 @@ fn grid(board: Board, run: Run) {
         ),
       ]),
       // borders
-      svg.g([attr_str("stroke", color.grid_border())], [
+      svg.g([attr_str("stroke", color.game_outline())], [
         line(0, 0, w, 0, grid_line_width * 2),
-        line(0, offset.y, w, size, grid_line_width),
+        line(0, size, w, size, grid_line_width),
         line(0, 0, 0, h, grid_line_width * 2),
         line(0, h, w, h, grid_line_width * 2),
         line(w, 0, w, h, grid_line_width * 2),

@@ -6,7 +6,7 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/set.{type Set}
 import lustre
-import lustre/attribute
+import lustre/attribute.{type Attribute as Attr}
 import lustre/effect
 import lustre/element.{text}
 import lustre/element/html
@@ -462,7 +462,7 @@ fn view(model: Model) {
 
 const attr_str = attribute.attribute
 
-fn attr(name: String, value: Int) -> attribute.Attribute(a) {
+fn attr(name: String, value: Int) -> Attr(a) {
   attr_str(name, int.to_string(value))
 }
 
@@ -480,10 +480,7 @@ fn int_fraction(n: Int, mult: Float) -> Int {
   int.to_float(n) *. mult |> float.round
 }
 
-fn bbox_to_attrs(
-  bbox: position.Bbox,
-  offset: Pos,
-) -> List(attribute.Attribute(msg)) {
+fn bbox_to_attrs(bbox: position.Bbox, offset: Pos) -> List(Attr(a)) {
   [
     attr("x", bbox.x + offset.x),
     attr("y", bbox.y + offset.y),
@@ -496,7 +493,7 @@ fn bbox_lines(
   bbox: position.Bbox,
   offset: Pos,
   dir: position.Move,
-) -> List(attribute.Attribute(msg)) {
+) -> List(Attr(a)) {
   case dir {
     Left -> [
       attr("x1", bbox.x + offset.x),

@@ -96,7 +96,7 @@ type Model {
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
   #(
     Model(
-      board: init_board(2),
+      board: init_board(1),
       run: Run(score: 0, lives: max_lives),
       tick_speed: 250,
       state: Menu,
@@ -395,6 +395,8 @@ fn menu_font_class() {
 fn view(model: Model) {
   html.div([class("fullscreen")], case model.state {
     Menu -> {
+      // menu is disabled for faster testing so we can jump straight in
+
       // [
       //   html.div([class("mask")], [
       //     html.h1([class("game-header")], [text("Snek Game")]),
@@ -478,8 +480,57 @@ fn int_fraction(n: Int, mult: Float) -> Int {
   int.to_float(n) *. mult |> float.round
 }
 
+fn bbox_to_attrs(
+  bbox: position.Bbox,
+  offset: Pos,
+) -> List(attribute.Attribute(msg)) {
+  [
+    attr("x", bbox.x + offset.x),
+    attr("y", bbox.y + offset.y),
+    attr("width", bbox.w),
+    attr("height", bbox.h),
+  ]
+}
+
+fn bbox_lines(
+  bbox: position.Bbox,
+  offset: Pos,
+  dir: position.Move,
+) -> List(attribute.Attribute(msg)) {
+  case dir {
+    Left -> [
+      attr("x1", bbox.x + offset.x),
+      attr("y1", bbox.y + offset.y),
+      attr("x2", bbox.x + offset.x),
+      attr("y2", bbox.y + offset.y + bbox.h),
+    ]
+    Right -> [
+      attr("x1", bbox.x + offset.x + bbox.w),
+      attr("y1", bbox.y + offset.y),
+      attr("x2", bbox.x + offset.x + bbox.w),
+      attr("y2", bbox.y + offset.y + bbox.h),
+    ]
+    Up -> [
+      attr("x1", bbox.x + offset.x),
+      attr("y1", bbox.y + offset.y),
+      attr("x2", bbox.x + offset.x + bbox.w),
+      attr("y2", bbox.y + offset.y),
+    ]
+    Down -> [
+      attr("x1", bbox.x + offset.x),
+      attr("y1", bbox.y + offset.y + bbox.h),
+      attr("x2", bbox.x + offset.x + bbox.w),
+      attr("y2", bbox.y + offset.y + bbox.h),
+    ]
+  }
+}
+
 fn grid(board: Board, run: Run) {
   let size = board.size
+  let to_bbox = fn(p: Pos) -> position.Bbox {
+    position.to_bbox(p, board.w, board.h, size)
+  }
+
   let offset = Pos(size / 2, size + size / 2)
   let board_w = board.w * size
   let board_h = board.h * size
@@ -602,22 +653,94 @@ fn grid(board: Board, run: Run) {
         })
       },
       // exit
-      svg.g([attr_str("fill", "green"), attr("stroke-width", 4)], {
-        case board.level.exit_revealed {
-          True -> {
-            let pos = board.level.exit
-            [
-              svg.rect([
-                attr("x", pos.x * size + offset.x),
-                attr("y", pos.y * size + offset.y),
-                attr("width", size),
-                attr("height", size),
-              ]),
-            ]
+      svg.g(
+        [
+          // attr_str("fill", "green"), 
+        ],
+        {
+          let exit = level_gen.exit(board.level.exit, board.w, board.h)
+          let exit_bbox = to_bbox(exit.pos)
+          let wall_bbox = to_bbox(exit.wall)
+          let wall_x = wall_bbox.x + offset.x
+          let wall_y = wall_bbox.y + offset.y
+          let wall_h = wall_bbox.h
+          let countdown = level_gen.exit_countdown(board.level)
+          // centering.. fiddly because 10 is wider than single digits
+          let #(countdown_x, countdown_y) = case exit.orientation {
+            level_gen.Vertical -> {
+              let x = case countdown {
+                10 -> wall_x + 1
+                _ -> wall_x + 6
+              }
+              let y = wall_y + wall_h - 13
+              #(x, y)
+            }
+            level_gen.Horizontal -> {
+              let x = case countdown {
+                10 -> wall_x + 11
+                _ -> wall_x + 15
+              }
+              let y = wall_y + wall_h - 5
+              #(x, y)
+            }
           }
-          False -> []
-        }
-      }),
+
+          case board.level.exit_revealed {
+            True -> {
+              let hilite = color.hsl(126, 90, 61)
+              [
+                svg.rect([
+                  attr_str("fill", hilite),
+                  attr_str("opacity", "0.6"),
+                  ..bbox_to_attrs(exit_bbox, offset)
+                ]),
+                svg.rect([
+                  attr_str("fill", hilite),
+                  attr_str("opacity", "1.0"),
+                  ..bbox_to_attrs(wall_bbox, offset)
+                ]),
+                svg.line([
+                  attr_str("stroke", color.grid_lines()),
+                  attr("stroke-width", 5),
+                  ..bbox_lines(wall_bbox, offset, Down)
+                ]),
+                svg.line([
+                  attr_str("stroke", color.grid_lines()),
+                  attr("stroke-width", 5),
+                  ..bbox_lines(wall_bbox, offset, Up)
+                ]),
+              ]
+            }
+            False -> {
+              [
+                svg.rect([
+                  attr_str("fill", color.grid_border()),
+                  attr_str("opacity", "0.2"),
+                  ..bbox_to_attrs(exit_bbox, offset)
+                ]),
+                svg.rect([
+                  attr_str("fill", color.background()),
+                  attr_str("stroke", color.grid_border()),
+                  attr("stroke-width", 2),
+                  ..bbox_to_attrs(wall_bbox, offset)
+                ]),
+                {
+                  svg.text(
+                    [
+                      attr("x", countdown_x),
+                      attr("y", countdown_y),
+                      attr_str("class", "share-tech-mono-regular"),
+                      attr_str("class", "pause-text"),
+                      attr_str("fill", "white"),
+                    ],
+                    int.to_string(countdown),
+                  )
+                },
+              ]
+            }
+          }
+        },
+      ),
       // menu bar
       svg.g([attr("stroke-width", 0), attr_str("fill", color.background())], [
         svg.rect([

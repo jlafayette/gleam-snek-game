@@ -11,15 +11,6 @@ gleam run -m lustre/dev start
 
 ## TODO Ideas
 
-- Place exit in wall, and have it visible from the start, and then open
-  [x] expand board 20 px (1/2 size) in all directions, do the offsets to make
-      this work
-  [x] add a wall indicator around border
-  [ ] add a door indicator where exit is
-  [ ] add a door open indicator where exit is
-  [ ] create arrow svg element (rotate based on exit dir)
-  [ ] light up arrow in green when exit is open
-  
 - Timer when exit is opened start
 - When timer runs out, die
 - Sounds!
@@ -30,8 +21,10 @@ gleam run -m lustre/dev start
 - Add more levels (at least 10)
 - Win screen
 - High score screen
+- Tutorial
 - Logging
 - Better snake graphics (simple head/tail)
+- Music
 - Score numbers when eating +1
 - Score multipliers (spawn when exit opens for added risk/reward)
 - Local coop

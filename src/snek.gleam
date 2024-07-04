@@ -290,9 +290,9 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 
 fn move(model: Model) -> Model {
   let board = model.board
-  let exit = case board.level.exit_revealed {
-    True -> Some(board.level.exit)
-    False -> None
+  let exit = case board.level.exit {
+    level_gen.Exit(_, _) -> None
+    level_gen.ExitTimer(pos, _) -> Some(pos)
   }
   let result =
     player.move(
@@ -313,7 +313,7 @@ fn move(model: Model) -> Model {
       ..board,
       snek: result.snek,
       food: new_food,
-      level: level_gen.score(board.level, score_increase),
+      level: level_gen.update(board.level, score_increase),
     )
   case result.died {
     True -> {
@@ -655,15 +655,15 @@ fn grid(board: Board, run: Run) {
           // attr_str("fill", "green"), 
         ],
         {
-          let exit = level_gen.exit(board.level.exit, board.w, board.h)
-          let exit_bbox = to_bbox(exit.pos)
-          let wall_bbox = to_bbox(exit.wall)
+          let exit_info = level_gen.exit(board.level.exit.pos, board.w, board.h)
+          let exit_bbox = to_bbox(exit_info.pos)
+          let wall_bbox = to_bbox(exit_info.wall)
           let wall_x = wall_bbox.x + offset.x
           let wall_y = wall_bbox.y + offset.y
           let wall_h = wall_bbox.h
           let countdown = level_gen.exit_countdown(board.level)
           // centering.. fiddly because 10 is wider than single digits
-          let #(countdown_x, countdown_y) = case exit.orientation {
+          let #(countdown_x, countdown_y) = case exit_info.orientation {
             level_gen.Vertical -> {
               let x = case countdown {
                 10 -> wall_x + 1
@@ -682,8 +682,8 @@ fn grid(board: Board, run: Run) {
             }
           }
 
-          case board.level.exit_revealed {
-            True -> {
+          case board.level.exit {
+            level_gen.ExitTimer(_, _) -> {
               let hilite = color.hsl(126, 90, 61)
               [
                 svg.rect([
@@ -708,7 +708,7 @@ fn grid(board: Board, run: Run) {
                 ]),
               ]
             }
-            False -> {
+            level_gen.Exit(_, _) -> {
               [
                 svg.rect([
                   attr_str("fill", color.grid_border()),
@@ -763,13 +763,42 @@ fn grid(board: Board, run: Run) {
         ),
         svg.text(
           [
-            attr("x", 120),
+            attr("x", 135),
             attr("y", size - 12),
             attr_str("class", "share-tech-mono-regular"),
             attr_str("class", "pause-text"),
           ],
           "lives:" <> int.to_string(run.lives),
         ),
+        case board.level.exit {
+          level_gen.Exit(_, to_unlock) -> {
+            svg.text(
+              [
+                attr("x", 240),
+                attr("y", size - 12),
+                attr_str("class", "share-tech-mono-regular"),
+                attr_str("class", "pause-text"),
+              ],
+              "food to unlock:" <> int.to_string(to_unlock),
+            )
+          }
+          level_gen.ExitTimer(_, t) -> {
+            let col = case t <= 0 {
+              True -> "red"
+              False -> "white"
+            }
+            svg.text(
+              [
+                attr("x", 240),
+                attr("y", size - 12),
+                attr_str("class", "share-tech-mono-regular"),
+                attr_str("class", "pause-text"),
+                attr_str("fill", col),
+              ],
+              int.to_string(t),
+            )
+          }
+        },
       ]),
       // borders
       svg.g([attr_str("stroke", color.game_outline())], [

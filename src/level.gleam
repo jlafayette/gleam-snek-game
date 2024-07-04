@@ -4,14 +4,18 @@ import gleam/option.{type Option, Some}
 import gleam/string
 import position.{type Move, type Pos, Down, Left, Pos, Right, Up}
 
+pub type Exit {
+  Exit(pos: Pos, to_unlock: Int)
+  ExitTimer(pos: Pos, timer: Int)
+}
+
 pub type Level {
   Level(
     number: Int,
     snek_pos: Pos,
     snek_dir: Move,
     walls: List(Pos),
-    exit: Pos,
-    exit_revealed: Bool,
+    exit: Exit,
     score: Int,
     eaten: Int,
   )
@@ -111,7 +115,7 @@ type Item {
   Wall(Pos)
   SnekInit(Pos)
   Dir(Move)
-  Exit(Pos)
+  ExitItem(Pos)
   Empty
 }
 
@@ -123,7 +127,7 @@ fn collect_items(acc: Acc, item: Item) -> Acc {
     Wall(pos) -> #([pos, ..acc.0], acc.1, acc.2, acc.3)
     SnekInit(pos) -> #(acc.0, Some(pos), acc.2, acc.3)
     Dir(move) -> #(acc.0, acc.1, Some(move), acc.3)
-    Exit(pos) -> #(acc.0, acc.1, acc.2, Some(pos))
+    ExitItem(pos) -> #(acc.0, acc.1, acc.2, Some(pos))
     _ -> acc
   }
 }
@@ -140,7 +144,7 @@ fn read_row(row: #(String, Int)) -> List(Item) {
       ">" -> Dir(Right)
       "<" -> Dir(Left)
       "v" | "V" -> Dir(Down)
-      "E" | "e" -> Exit(Pos(x, y))
+      "E" | "e" -> ExitItem(Pos(x, y))
       _ -> Empty
     }
   })
@@ -166,8 +170,7 @@ fn read(n: Int, lvl: String) -> Level {
         snek_pos: init_pos,
         snek_dir: dir,
         walls: walls,
-        exit: exit,
-        exit_revealed: False,
+        exit: Exit(exit, 10),
         score: 0,
         eaten: 0,
       )
@@ -190,18 +193,32 @@ pub fn get(n: Int, w: Int, h: Int) -> Level {
   }
 }
 
-pub fn score(lvl: Level, increase: Int) -> Level {
-  case increase > 0 {
+fn time_to_escape(_lvl: Level) -> Int {
+  // TODO: use width and height of board
+  20 + 15
+}
+
+pub fn update(lvl: Level, increase: Int) -> Level {
+  let increased = increase > 0
+  case increased {
     True -> {
+      let eaten = lvl.eaten + 1
       let exit_revealed = lvl.eaten >= 9
-      Level(
-        ..lvl,
-        score: lvl.score + increase,
-        eaten: lvl.eaten + 1,
-        exit_revealed: exit_revealed,
-      )
+      let exit = case lvl.exit, exit_revealed {
+        // TODO: base init timer on distance of snake to exit
+        Exit(p, _), True -> ExitTimer(pos: p, timer: time_to_escape(lvl))
+        Exit(p, _), False -> Exit(p, 10 - eaten)
+        ExitTimer(p, t), _ -> ExitTimer(p, t - 1)
+      }
+      Level(..lvl, score: lvl.score + increase, eaten: eaten, exit: exit)
     }
-    False -> lvl
+    False -> {
+      let exit = case lvl.exit {
+        ExitTimer(p, t) -> ExitTimer(p, t - 1)
+        e -> e
+      }
+      Level(..lvl, exit: exit)
+    }
   }
 }
 

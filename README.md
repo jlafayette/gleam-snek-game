@@ -11,7 +11,6 @@ gleam run -m lustre/dev start
 
 ## TODO Ideas
 
-- When timer runs out, die
 - Sounds!
 - When timer runs out, start spawning other snakes or hazards. start with
   spawn points away from exit, then moving towards exit area

@@ -9,6 +9,10 @@ pub type Exit {
   ExitTimer(pos: Pos, timer: Int)
 }
 
+const width = 20
+
+const height = 15
+
 pub type Level {
   Level(
     number: Int,
@@ -18,6 +22,8 @@ pub type Level {
     exit: Exit,
     score: Int,
     eaten: Int,
+    w: Int,
+    h: Int,
   )
 }
 
@@ -136,7 +142,7 @@ fn read_row(row: #(String, Int)) -> List(Item) {
   let #(line, y) = row
   line
   |> string.split("")
-  |> list.map2(list.range(0, 100), fn(char, x) {
+  |> list.map2(list.range(0, width), fn(char, x) {
     case char {
       "W" -> Wall(Pos(x, y))
       "S" -> SnekInit(Pos(x, y))
@@ -156,7 +162,7 @@ fn read(n: Int, lvl: String) -> Level {
     lvl
     |> string.split("\n")
     |> list.filter(fn(x) { x != "" })
-    |> list.map2(list.range(0, 100), fn(line, y) { #(line, y) })
+    |> list.map2(list.range(0, height), fn(line, y) { #(line, y) })
     |> list.map(fn(row) { read_row(row) })
     |> list.flatten
     |> list.fold(
@@ -173,6 +179,8 @@ fn read(n: Int, lvl: String) -> Level {
         exit: Exit(exit, 10),
         score: 0,
         eaten: 0,
+        w: width,
+        h: height,
       )
     _ -> panic as "Bad level data"
   }
@@ -182,20 +190,19 @@ pub fn clamp(n: Int) -> Int {
   int.clamp(n, 1, 5)
 }
 
-pub fn get(n: Int, w: Int, h: Int) -> Level {
+pub fn get(n: Int) -> Level {
   case n {
     1 -> read(1, lvl_1)
     2 -> read(2, lvl_2)
     3 -> read(3, lvl_3)
     4 -> read(4, lvl_4)
     5 -> read(5, lvl_5)
-    _ -> get(1, w, h)
+    _ -> get(1)
   }
 }
 
-fn time_to_escape(_lvl: Level) -> Int {
-  // TODO: use width and height of board
-  20 + 15
+fn time_to_escape(lvl: Level) -> Int {
+  lvl.w + lvl.h
 }
 
 pub fn update(lvl: Level, increase: Int) -> Level {

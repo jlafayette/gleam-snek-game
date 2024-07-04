@@ -59,14 +59,7 @@ fn window_clear_interval() -> Nil
 // --- Model
 
 type Board {
-  Board(
-    level: level_gen.Level,
-    food: Set(Pos),
-    snek: Snek,
-    w: Int,
-    h: Int,
-    size: Int,
-  )
+  Board(level: level_gen.Level, food: Set(Pos), snek: Snek, size: Int)
 }
 
 type GameState {
@@ -107,16 +100,12 @@ fn init(_flags) -> #(Model, effect.Effect(Msg)) {
 }
 
 fn init_board(level_number: Int) -> Board {
-  let width = 20
-  let height = 15
   let tile_size = 40
-  let level = level_gen.get(level_number, width, height)
+  let level = level_gen.get(level_number)
   Board(
     level,
-    init_food([level.snek_pos, ..level.walls], width, height),
+    init_food([level.snek_pos, ..level.walls], level.w, level.h),
     player.init(level.snek_pos, level.snek_dir),
-    width,
-    height,
     tile_size,
   )
 }
@@ -300,8 +289,8 @@ fn move(model: Model) -> Model {
       board.food,
       board.level.walls,
       exit,
-      board.w,
-      board.h,
+      board.level.w,
+      board.level.h,
     )
   let new_food = update_food(board)
   let score_increase = case result.died, result.ate {
@@ -361,8 +350,8 @@ fn update_food(board: Board) -> Set(Pos) {
 }
 
 fn add_random_food(head: Pos, board: Board, food: Set(Pos)) -> Set(Pos) {
-  let w = board.w
-  let h = board.h
+  let w = board.level.w
+  let h = board.level.h
   let snek = board.snek
   let walls = board.level.walls
   case int.random(5) {
@@ -525,12 +514,12 @@ fn bbox_lines(
 fn grid(board: Board, run: Run) {
   let size = board.size
   let to_bbox = fn(p: Pos) -> position.Bbox {
-    position.to_bbox(p, board.w, board.h, size)
+    position.to_bbox(p, board.level.w, board.level.h, size)
   }
 
   let offset = Pos(size / 2, size + size / 2)
-  let board_w = board.w * size
-  let board_h = board.h * size
+  let board_w = board.level.w * size
+  let board_h = board.level.h * size
   let w = board_w + { offset.x * 2 }
   let h = board_h + { offset.y + size / 2 }
 
@@ -655,7 +644,8 @@ fn grid(board: Board, run: Run) {
           // attr_str("fill", "green"), 
         ],
         {
-          let exit_info = level_gen.exit(board.level.exit.pos, board.w, board.h)
+          let exit_info =
+            level_gen.exit(board.level.exit.pos, board.level.w, board.level.h)
           let exit_bbox = to_bbox(exit_info.pos)
           let wall_bbox = to_bbox(exit_info.wall)
           let wall_x = wall_bbox.x + offset.x

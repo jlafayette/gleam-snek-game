@@ -4,6 +4,8 @@ import gleam/option.{type Option, Some}
 import gleam/string
 import position.{type Move, type Pos, Down, Left, Pos, Right, Up}
 
+import sound
+
 pub type Exit {
   Exit(pos: Pos, to_unlock: Int)
   ExitTimer(pos: Pos, timer: Int)
@@ -113,7 +115,7 @@ const lvl_5 = "
 ....................
 .....WWWWWWWWWW.....
 ....................
-....................
+........W.W.W.......
 ....................
 "
 
@@ -213,7 +215,10 @@ pub fn update(lvl: Level, increase: Int) -> Level {
       let exit_revealed = lvl.eaten >= 9
       let exit = case lvl.exit, exit_revealed {
         // TODO: base init timer on distance of snake to exit
-        Exit(p, _), True -> ExitTimer(pos: p, timer: time_to_escape(lvl))
+        Exit(p, _), True -> {
+          sound.play(sound.DoorOpen)
+          ExitTimer(pos: p, timer: time_to_escape(lvl))
+        }
         Exit(p, _), False -> Exit(p, 10 - eaten)
         ExitTimer(p, t), _ -> ExitTimer(p, t - 1)
       }

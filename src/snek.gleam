@@ -15,6 +15,7 @@ import lustre/element/svg
 import level as level_gen
 import player.{type Snek, Snek}
 import position.{type Pos, Down, Left, Pos, Right, Up}
+import sound
 
 // --- Main 
 
@@ -149,10 +150,12 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 
 fn update_menu(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
-    Keydown(str) if str == "Space" -> #(
-      Model(..model, state: Play, keydown: str),
-      every(model.tick_speed, Tick),
-    )
+    Keydown(str) if str == "Space" -> {
+      #(
+        Model(..model, state: Play, keydown: str),
+        every(model.tick_speed, Tick),
+      )
+    }
     Keydown(str) -> #(Model(..model, keydown: str), effect.none())
     _ -> #(model, effect.none())
   }
@@ -177,6 +180,7 @@ fn update_play(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         )
         "Escape" | "Space" -> {
           let _ = window_clear_interval()
+          sound.play(sound.Pause)
           #(Pause, model.board.snek)
         }
         _ -> #(Play, model.board.snek)
@@ -201,6 +205,7 @@ fn update_play(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     }
     Tick -> {
       io.debug("tick")
+      sound.play(sound.Move)
       #(move(model), effect.none())
     }
     TickStart(ms) -> {
@@ -220,6 +225,7 @@ fn update_pause(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     Keydown(str) -> {
       case str {
         "Escape" | "Space" -> {
+          sound.play(sound.Unpause)
           #(
             Model(..model, keydown: str, state: Play),
             every(model.tick_speed, Tick),
@@ -294,7 +300,10 @@ fn move(model: Model) -> Model {
     )
   let new_food = update_food(board)
   let score_increase = case result.died, result.ate {
-    False, True -> 1
+    False, True -> {
+      sound.play(sound.Eat)
+      1
+    }
     _, _ -> 0
   }
   let new_board =
@@ -306,6 +315,7 @@ fn move(model: Model) -> Model {
     )
   case result.died {
     True -> {
+      sound.play(sound.HitWall)
       let lives = model.run.lives - 1
       case lives == 0 {
         True ->
@@ -327,6 +337,7 @@ fn move(model: Model) -> Model {
     False -> {
       case result.exit {
         True -> {
+          sound.play(sound.LevelFinished)
           // score points
           // move to next level
           let score = model.run.score + model.board.level.score

@@ -11,7 +11,6 @@ gleam run -m lustre/dev start
 
 ## TODO Ideas
 
-- Don't spawn food at the exit
 - When timer runs out, start spawning walls that fill in the whole level.
   start with spawn points away from exit, then moving towards exit area
 - Telegraph spawn points with little doors or red markers

@@ -33,9 +33,10 @@ pub fn lookup(sound: Sound) -> String {
     LevelFinished -> "level_finished.mp3"
     Eat -> {
       [
-        "eat1_num.mp3", "eat2_num.mp3", "eat1_num.mp3", "eat2_num.mp3",
+        // "eat1_num.mp3", "eat2_num.mp3", "eat1_num.mp3", "eat2_num.mp3",
         // "eat3_num.mp3",
-        "eat4_num.mp3", "eat4_num.mp3",
+        "eat4_num.mp3",
+        // "eat4_num.mp3",
         // "eat5_num.mp3",
         // "eat6_mmm.mp3",
         "eat7_tasty.mp3", "eat8_num_num_num.mp3",

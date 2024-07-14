@@ -311,7 +311,7 @@ fn move(model: Model) -> Model {
       ..board,
       snek: result.snek,
       food: new_food,
-      level: level_gen.update(board.level, score_increase),
+      level: level_gen.update(board.level, score_increase, result.snek),
     )
   case result.died {
     True -> {
@@ -365,11 +365,13 @@ fn add_random_food(head: Pos, board: Board, food: Set(Pos)) -> Set(Pos) {
   let h = board.level.h
   let snek = board.snek
   let walls = board.level.walls
+  let exit = board.level.exit.pos
   case int.random(5) {
     0 -> {
       let p = random_pos(w, h)
       case
         head == p
+        || exit == p
         || player.body_contains(snek, p)
         || list.contains(walls, p)
       {

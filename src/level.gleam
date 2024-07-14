@@ -1,7 +1,9 @@
 import gleam/int
 import gleam/list
-import gleam/option.{type Option, Some}
+import gleam/option.{type Option, None, Some}
+import gleam/order
 import gleam/string
+import player.{type Snek}
 import position.{type Move, type Pos, Down, Left, Pos, Right, Up}
 
 import sound
@@ -203,13 +205,67 @@ pub fn get(n: Int) -> Level {
   }
 }
 
+const abs = int.absolute_value
+
+fn distance(p1: Pos, p2: Pos) -> Int {
+  abs(p1.x - p2.x) + abs(p1.y - p2.y)
+}
+
+fn update_walls(lvl: Level, snek: Snek) -> Level {
+  case lvl.exit {
+    ExitTimer(exit, t) if t < 0 -> {
+      let w = lvl.w
+      let h = lvl.h
+      // let exit = Pos(2, 0)
+      // let body = [Pos(0, 0), Pos(0, 1)]
+      let body = snek.body
+      let walls = lvl.walls
+
+      let candidates =
+        list.range(0, w - 1)
+        |> list.map(fn(x) {
+          list.range(0, h - 1)
+          |> list.map(fn(y) { Pos(x, y) })
+        })
+        |> list.flatten
+        |> list.map(fn(p) { #(p, distance(p, exit)) })
+        |> list.filter(fn(a) {
+          let #(p, _) = a
+          !list.contains(body, p) && !list.contains(walls, p)
+        })
+        |> list.sort(fn(a, b) {
+          let #(_, da) = a
+          let #(_, db) = b
+          case da == db {
+            True -> order.Eq
+            False ->
+              case da < db {
+                // reversed
+                True -> order.Gt
+                False -> order.Lt
+              }
+          }
+        })
+      let new_wall = case candidates {
+        [f, ..] -> Some(f.0)
+        [] -> None
+      }
+      case new_wall {
+        Some(wall) -> Level(..lvl, walls: [wall, ..lvl.walls])
+        None -> lvl
+      }
+    }
+    _ -> lvl
+  }
+}
+
 fn time_to_escape(lvl: Level) -> Int {
   lvl.w + lvl.h
 }
 
-pub fn update(lvl: Level, increase: Int) -> Level {
+pub fn update(lvl: Level, increase: Int, snek: Snek) -> Level {
   let increased = increase > 0
-  case increased {
+  let lvl = case increased {
     True -> {
       let eaten = lvl.eaten + 1
       let exit_revealed = lvl.eaten >= 9
@@ -232,6 +288,7 @@ pub fn update(lvl: Level, increase: Int) -> Level {
       Level(..lvl, exit: exit)
     }
   }
+  update_walls(lvl, snek)
 }
 
 pub type Orientation {

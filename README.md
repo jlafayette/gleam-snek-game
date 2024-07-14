@@ -11,7 +11,12 @@ gleam run -m lustre/dev start
 
 ## TODO Ideas
 
+- Minor polish
+  - draw edge wall on top of snake (except for exiting state)
+
 - Wall spawn
+  - First use set spawn points 1,2,3,4 from map to test
+  - Pick random spot along wall (weighted towards edges away from exit)
   - Improve spawning walls so they go quicker, maybe spreading out from existing
     walls? 
   - Walls shouldn't be able to go through the snake - allowing containing a patch

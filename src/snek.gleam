@@ -12,8 +12,9 @@ import lustre/element.{text}
 import lustre/element/html
 import lustre/element/svg
 
+import board.{type Board, Board}
 import level as level_gen
-import player.{type Snek, Snek}
+import player
 import position.{type Pos, Down, Left, Pos, Right, Up}
 import sound
 
@@ -59,10 +60,6 @@ fn window_clear_interval() -> Nil
 
 // --- Model
 
-type Board {
-  Board(level: level_gen.Level, food: Set(Pos), snek: Snek, size: Int)
-}
-
 type GameState {
   Menu
   Play
@@ -90,7 +87,7 @@ type Model {
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
   #(
     Model(
-      board: init_board(1),
+      board: board.init(1),
       run: Run(score: 0, lives: max_lives),
       tick_speed: 250,
       state: Menu,
@@ -98,25 +95,6 @@ fn init(_flags) -> #(Model, effect.Effect(Msg)) {
     ),
     effect.none(),
   )
-}
-
-fn init_board(level_number: Int) -> Board {
-  let tile_size = 40
-  let level = level_gen.get(level_number)
-  Board(
-    level,
-    init_food([level.snek_pos, ..level.walls], level.w, level.h),
-    player.init(level.snek_pos, level.snek_dir),
-    tile_size,
-  )
-}
-
-fn init_food(exclude: List(Pos), w: Int, h: Int) -> Set(Pos) {
-  let f = Pos(int.random(w), int.random(h))
-  case list.contains(exclude, f) {
-    True -> init_food(exclude, w, h)
-    False -> set.from_list([f])
-  }
 }
 
 // --- Update
@@ -188,7 +166,7 @@ fn update_play(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       case new_level == level_num {
         False -> {
           #(
-            Model(..model, board: init_board(new_level), keydown: str),
+            Model(..model, board: board.init(new_level), keydown: str),
             effect.none(),
           )
         }
@@ -246,7 +224,7 @@ fn update_died(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           #(
             Model(
               ..model,
-              board: init_board(model.board.level.number),
+              board: board.init(model.board.level.number),
               keydown: str,
               state: Play,
             ),
@@ -269,7 +247,7 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
             Model(
               ..model,
               run: Run(score: 0, lives: max_lives),
-              board: init_board(1),
+              board: board.init(1),
               keydown: str,
               state: Play,
             ),
@@ -345,7 +323,7 @@ fn move(model: Model) -> Model {
           Model(
             ..model,
             run: Run(..model.run, score: score),
-            board: init_board(new_level),
+            board: board.init(new_level),
           )
         }
         False -> Model(..model, board: new_board, state: Play)

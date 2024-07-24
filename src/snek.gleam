@@ -4,7 +4,7 @@ import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
-import gleam/set.{type Set}
+import gleam/set
 import lustre
 import lustre/attribute.{type Attribute as Attr}
 import lustre/effect
@@ -270,13 +270,12 @@ fn move(model: Model) -> Model {
   let result =
     player.move(
       model.board.snek,
-      board.food,
+      set.from_list(board.food(model.board)),
       board.level.walls,
       exit,
       board.level.w,
       board.level.h,
     )
-  let new_food = update_food(board)
   let score_increase = case result.died, result.ate {
     False, True -> {
       sound.play(sound.Eat)
@@ -285,10 +284,10 @@ fn move(model: Model) -> Model {
     _, _ -> 0
   }
   let new_board =
+    // TODO: move level_gen.update into board.update
     Board(
-      ..board,
+      ..board.update(board, result.snek),
       snek: result.snek,
-      food: new_food,
       level: level_gen.update(board.level, score_increase, result.snek),
     )
   case result.died {
@@ -318,51 +317,17 @@ fn move(model: Model) -> Model {
           sound.play(sound.LevelFinished)
           // score points
           // move to next level
-          let score = model.run.score + model.board.level.score
-          let new_level = model.board.level.number + 1
+          let score = model.run.score + board.level_score(model.board)
           Model(
             ..model,
             run: Run(..model.run, score: score),
-            board: board.init(new_level),
+            board: board.next_level(model.board),
           )
         }
         False -> Model(..model, board: new_board, state: Play)
       }
     }
   }
-}
-
-fn update_food(board: Board) -> Set(Pos) {
-  let head = player.head(board.snek)
-  let food = set.delete(board.food, head)
-  add_random_food(head, board, food)
-}
-
-fn add_random_food(head: Pos, board: Board, food: Set(Pos)) -> Set(Pos) {
-  let w = board.level.w
-  let h = board.level.h
-  let snek = board.snek
-  let walls = board.level.walls
-  let exit = board.level.exit.pos
-  case int.random(5) {
-    0 -> {
-      let p = random_pos(w, h)
-      case
-        head == p
-        || exit == p
-        || player.body_contains(snek, p)
-        || list.contains(walls, p)
-      {
-        True -> food
-        False -> set.insert(food, p)
-      }
-    }
-    _ -> food
-  }
-}
-
-fn random_pos(w: Int, h: Int) -> Pos {
-  Pos(int.random(w), int.random(h))
 }
 
 // --- View
@@ -502,15 +467,15 @@ fn bbox_lines(
   }
 }
 
-fn grid(board: Board, run: Run) {
-  let size = board.size
+fn grid(b: Board, run: Run) {
+  let size = b.size
   let to_bbox = fn(p: Pos) -> position.Bbox {
-    position.to_bbox(p, board.level.w, board.level.h, size)
+    position.to_bbox(p, b.level.w, b.level.h, size)
   }
 
   let offset = Pos(size / 2, size + size / 2)
-  let board_w = board.level.w * size
-  let board_h = board.level.h * size
+  let board_w = b.level.w * size
+  let board_h = b.level.h * size
   let w = board_w + { offset.x * 2 }
   let h = board_h + { offset.y + size / 2 }
 
@@ -582,19 +547,6 @@ fn grid(board: Board, run: Run) {
             line(x1, y, x2, y, grid_line_width)
           }),
       ),
-      // food
-      svg.g(
-        [attr_str("fill", color.food()), attr("stroke-width", 0)],
-        board.food
-          |> set.to_list
-          |> list.map(fn(pos) {
-            svg.circle([
-              attr("cx", { pos.x * size } + half_size + offset.x),
-              attr("cy", { pos.y * size } + half_size + offset.y),
-              attr("r", food_radius),
-            ])
-          }),
-      ),
       // snek
       svg.g(
         [
@@ -607,9 +559,21 @@ fn grid(board: Board, run: Run) {
             attr_str("stroke-linecap", "square"),
             // attr_str("stroke-linejoin", "round"),
             // attr_str("points", "20,20 20,60 60,60"),
-            attr_str("points", snek_to_points(board.snek.body, size, offset)),
+            attr_str("points", snek_to_points(b.snek.body, size, offset)),
           ]),
         ],
+      ),
+      // food (draw on top for debugging)
+      svg.g(
+        [attr_str("fill", color.food()), attr("stroke-width", 0)],
+        board.food(b)
+          |> list.map(fn(pos) {
+            svg.circle([
+              attr("cx", { pos.x * size } + half_size + offset.x),
+              attr("cy", { pos.y * size } + half_size + offset.y),
+              attr("r", food_radius),
+            ])
+          }),
       ),
       // walls
       {
@@ -617,7 +581,7 @@ fn grid(board: Board, run: Run) {
         let center_offset = int_fraction(size, 0.1)
         svg.g([attr_str("fill", color.grid_lines())], {
           {
-            board.level.walls
+            b.level.walls
             |> list.map(fn(pos) {
               svg.rect([
                 attr("x", pos.x * size + { offset.x + center_offset }),
@@ -635,14 +599,13 @@ fn grid(board: Board, run: Run) {
           // attr_str("fill", "green"), 
         ],
         {
-          let exit_info =
-            level_gen.exit(board.level.exit.pos, board.level.w, board.level.h)
+          let exit_info = board.exit_info(b)
           let exit_bbox = to_bbox(exit_info.pos)
           let wall_bbox = to_bbox(exit_info.wall)
           let wall_x = wall_bbox.x + offset.x
           let wall_y = wall_bbox.y + offset.y
           let wall_h = wall_bbox.h
-          let countdown = level_gen.exit_countdown(board.level)
+          let countdown = level_gen.exit_countdown(b.level)
           // centering.. fiddly because 10 is wider than single digits
           let #(countdown_x, countdown_y) = case exit_info.orientation {
             level_gen.Vertical -> {
@@ -663,7 +626,7 @@ fn grid(board: Board, run: Run) {
             }
           }
 
-          case board.level.exit {
+          case b.level.exit {
             level_gen.ExitTimer(_, _) -> {
               let hilite = color.hsl(126, 90, 61)
               [
@@ -737,9 +700,9 @@ fn grid(board: Board, run: Run) {
             attr_str("class", "pause-text"),
           ],
           "score:"
-            <> int.to_string(run.score + board.level.score)
+            <> int.to_string(run.score + board.level_score(b))
             <> "("
-            <> int.to_string(board.level.score)
+            <> int.to_string(board.level_score(b))
             <> ")",
         ),
         svg.text(
@@ -751,7 +714,7 @@ fn grid(board: Board, run: Run) {
           ],
           "lives:" <> int.to_string(run.lives),
         ),
-        case board.level.exit {
+        case b.level.exit {
           level_gen.Exit(_, to_unlock) -> {
             svg.text(
               [

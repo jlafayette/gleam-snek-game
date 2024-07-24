@@ -26,6 +26,22 @@ fn neck(snek: Snek) -> Pos {
   }
 }
 
+pub fn tail(snek: Snek) -> #(Pos, Int) {
+  r_tail(#(Pos(-1, -1), 0), snek.body)
+}
+
+fn r_tail(acc: #(Pos, Int), body: List(Pos)) -> #(Pos, Int) {
+  let #(p, n) = acc
+  case body {
+    [t, ..rest] ->
+      case p == t {
+        True -> r_tail(#(p, n + 1), rest)
+        False -> r_tail(#(t, 1), rest)
+      }
+    [] -> acc
+  }
+}
+
 pub type Result {
   Result(snek: Snek, died: Bool, exit: Bool, ate: Bool)
 }

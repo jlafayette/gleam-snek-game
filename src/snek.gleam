@@ -262,34 +262,7 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 }
 
 fn move(model: Model) -> Model {
-  let board = model.board
-  let exit = case board.level.exit {
-    level_gen.Exit(_, _) -> None
-    level_gen.ExitTimer(pos, _) -> Some(pos)
-  }
-  let result =
-    player.move(
-      model.board.snek,
-      set.from_list(board.food(model.board)),
-      board.level.walls,
-      exit,
-      board.level.w,
-      board.level.h,
-    )
-  let score_increase = case result.died, result.ate {
-    False, True -> {
-      sound.play(sound.Eat)
-      1
-    }
-    _, _ -> 0
-  }
-  let new_board =
-    // TODO: move level_gen.update into board.update
-    Board(
-      ..board.update(board, result.snek),
-      snek: result.snek,
-      level: level_gen.update(board.level, score_increase, result.snek),
-    )
+  let #(new_board, result) = board.update(model.board)
   case result.died {
     True -> {
       sound.play(sound.HitWall)

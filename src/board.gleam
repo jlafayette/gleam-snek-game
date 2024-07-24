@@ -1,9 +1,12 @@
 import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
+import gleam/option.{None, Some}
+import gleam/set
 import level as level_gen
 import player.{type Snek}
 import position.{type Pos, Pos}
+import sound
 
 pub type Grid =
   Dict(Pos, Square)
@@ -80,23 +83,50 @@ pub fn init(level_number: Int) -> Board {
   Board(level, grid, snek, tile_size)
 }
 
-pub fn update(board: Board, snek: Snek) -> Board {
+pub fn update(board: Board) -> #(Board, player.Result) {
+  let exit = case board.level.exit {
+    level_gen.Exit(_, _) -> None
+    level_gen.ExitTimer(pos, _) -> Some(pos)
+  }
+  let result =
+    player.move(
+      board.snek,
+      set.from_list(food(board)),
+      board.level.walls,
+      exit,
+      board.level.w,
+      board.level.h,
+    )
+  let score_increase = case result.died, result.ate {
+    False, True -> {
+      sound.play(sound.Eat)
+      1
+    }
+    _, _ -> 0
+  }
   let grid = update_food(board.grid, board.level.w, board.level.h)
-  // let head = player.head(board.snek)
-  let #(tail_pos, tail_count) = player.tail(snek)
+  let #(tail_pos, tail_count) = player.tail(result.snek)
   let grid =
     dict.map_values(grid, fn(pos, square) {
       case pos == tail_pos {
         True -> Square(..square, fg: FgSnakeTail(tail_count))
         False -> {
-          case player.body_contains(snek, pos) {
+          case player.body_contains(result.snek, pos) {
             True -> Square(..square, fg: FgSnakeBody)
             False -> square
           }
         }
       }
     })
-  Board(..board, grid: grid)
+  #(
+    Board(
+      ..board,
+      grid: grid,
+      snek: result.snek,
+      level: level_gen.update(board.level, score_increase, result.snek),
+    ),
+    result,
+  )
 }
 
 fn init_food(g: Grid, w: Int, h: Int) -> Grid {

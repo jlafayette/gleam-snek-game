@@ -21,17 +21,11 @@ pub type Exit {
 // TODO: move some of this into the grid
 // wall spawn -> grid
 pub type Level {
-  Level(number: Int, score: Int, w: Int, h: Int, wall_spawn: List(Pos))
+  Level(number: Int, w: Int, h: Int, wall_spawn: List(Pos))
 }
 
 fn get_level(parsed: level_gen.Parsed) -> Level {
-  Level(
-    number: parsed.number,
-    score: 0,
-    w: width,
-    h: height,
-    wall_spawn: parsed.spawns,
-  )
+  Level(number: parsed.number, w: width, h: height, wall_spawn: parsed.spawns)
 }
 
 pub type Grid =
@@ -225,10 +219,6 @@ fn random_pos(w: Int, h: Int) -> Pos {
 
 pub fn next_level(b: Board) -> Board {
   init(b.level.number + 1)
-}
-
-pub fn level_score(b: Board) -> Int {
-  b.level.score
 }
 
 pub fn exit_info(b: Board) -> ExitInfo {

@@ -69,7 +69,7 @@ type GameState {
 const max_lives = 3
 
 type Run {
-  Run(score: Int, lives: Int)
+  Run(score: Int, level_score: Int, lives: Int)
 }
 
 type Model {
@@ -86,7 +86,7 @@ fn init(_flags) -> #(Model, effect.Effect(Msg)) {
   #(
     Model(
       board: board.init(1),
-      run: Run(score: 0, lives: max_lives),
+      run: Run(score: 0, level_score: 0, lives: max_lives),
       tick_speed: 250,
       state: Menu,
       keydown: "N/A",
@@ -244,7 +244,7 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
           #(
             Model(
               ..model,
-              run: Run(score: 0, lives: max_lives),
+              run: Run(score: 0, level_score: 0, lives: max_lives),
               board: board.init(1),
               keydown: str,
               state: Play,
@@ -288,14 +288,27 @@ fn move(model: Model) -> Model {
           sound.play(sound.LevelFinished)
           // score points
           // move to next level
-          let score = model.run.score + board.level_score(model.board)
+          let score = model.run.score + model.run.level_score
           Model(
             ..model,
-            run: Run(..model.run, score: score),
+            run: Run(..model.run, score: score, level_score: 0),
             board: board.next_level(model.board),
           )
         }
-        False -> Model(..model, board: new_board, state: Play)
+        False -> {
+          // increase level score if ate this turn
+          let lvl_score = case result.ate {
+            True -> model.run.level_score + 1
+            False -> model.run.level_score
+          }
+
+          Model(
+            ..model,
+            run: Run(..model.run, level_score: lvl_score),
+            board: new_board,
+            state: Play,
+          )
+        }
       }
     }
   }
@@ -671,9 +684,9 @@ fn grid(b: Board, run: Run) {
             attr_str("class", "pause-text"),
           ],
           "score:"
-            <> int.to_string(run.score + board.level_score(b))
+            <> int.to_string(run.score + run.level_score)
             <> "("
-            <> int.to_string(board.level_score(b))
+            <> int.to_string(run.level_score)
             <> ")",
         ),
         svg.text(

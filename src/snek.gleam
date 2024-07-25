@@ -597,7 +597,7 @@ fn grid(b: Board, run: Run) {
             }
           }
 
-          case b.level.exit {
+          case b.exit {
             board.ExitTimer(_, _) -> {
               let hilite = color.hsl(126, 90, 61)
               [
@@ -685,7 +685,7 @@ fn grid(b: Board, run: Run) {
           ],
           "lives:" <> int.to_string(run.lives),
         ),
-        case b.level.exit {
+        case b.exit {
           board.Exit(_, to_unlock) -> {
             svg.text(
               [

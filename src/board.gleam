@@ -19,13 +19,10 @@ pub type Exit {
 }
 
 // TODO: move some of this into the grid
-// walls -> grid
-// exit -> grid
 // wall spawn -> grid
 pub type Level {
   Level(
     number: Int,
-    exit: Exit,
     score: Int,
     eaten: Int,
     w: Int,
@@ -37,7 +34,6 @@ pub type Level {
 fn get_level(parsed: level_gen.Parsed) -> Level {
   Level(
     number: parsed.number,
-    exit: Exit(parsed.exit_pos, 10),
     score: 0,
     eaten: 0,
     w: width,
@@ -50,7 +46,7 @@ pub type Grid =
   Dict(Pos, Square)
 
 pub type Board {
-  Board(level: Level, grid: Grid, snek: Snek, size: Int)
+  Board(level: Level, grid: Grid, snek: Snek, exit: Exit, size: Int)
 }
 
 pub fn food(b: Board) -> List(Pos) {
@@ -129,12 +125,13 @@ pub fn init(level_number: Int) -> Board {
     })
     |> dict.from_list
     |> init_food(w, h)
+    |> add_exit(parsed.exit_pos)
 
-  Board(level, grid, snek, tile_size)
+  Board(level, grid, snek, Exit(parsed.exit_pos, 10), tile_size)
 }
 
 pub fn update(board: Board) -> #(Board, player.Result) {
-  let exit = case board.level.exit {
+  let exit = case board.exit {
     Exit(_, _) -> None
     ExitTimer(pos, _) -> Some(pos)
   }
@@ -168,16 +165,27 @@ pub fn update(board: Board) -> #(Board, player.Result) {
         }
       }
     })
+  let lvl = update_level(board.level, score_increase)
   #(
     Board(
       ..board,
       grid: grid,
       snek: result.snek,
-      level: update_level(board.level, score_increase),
+      exit: update_exit(board.exit, lvl, score_increase),
+      level: lvl,
     )
       |> update_walls,
     result,
   )
+}
+
+fn add_exit(g: Grid, pos: Pos) -> Grid {
+  dict.update(g, pos, fn(o) {
+    case o {
+      Some(square) -> Square(..square, bg: BgExit)
+      _ -> Square(fg: FgEmpty, bg: BgEmpty)
+    }
+  })
 }
 
 fn init_food(g: Grid, w: Int, h: Int) -> Grid {
@@ -232,7 +240,7 @@ pub fn level_score(b: Board) -> Int {
 }
 
 pub fn exit_info(b: Board) -> ExitInfo {
-  get_exit_info(b.level.exit.pos, b.level.w, b.level.h)
+  get_exit_info(b.exit.pos, b.level.w, b.level.h)
 }
 
 const abs = int.absolute_value
@@ -246,30 +254,40 @@ fn update_level(lvl: Level, increase: Int) -> Level {
   case increased {
     True -> {
       let eaten = lvl.eaten + 1
+      Level(..lvl, score: lvl.score + increase, eaten: eaten)
+    }
+    False -> {
+      lvl
+    }
+  }
+}
+
+fn update_exit(exit: Exit, lvl: Level, increase: Int) -> Exit {
+  let increased = increase > 0
+  case increased {
+    True -> {
       let exit_revealed = lvl.eaten >= 9
-      let exit = case lvl.exit, exit_revealed {
+      case exit, exit_revealed {
         // TODO: base init timer on distance of snake to exit
         Exit(p, _), True -> {
           sound.play(sound.DoorOpen)
           ExitTimer(pos: p, timer: time_to_escape(lvl))
         }
-        Exit(p, _), False -> Exit(p, 10 - eaten)
+        Exit(p, _), False -> Exit(p, 10 - lvl.eaten)
         ExitTimer(p, t), _ -> ExitTimer(p, t - 1)
       }
-      Level(..lvl, score: lvl.score + increase, eaten: eaten, exit: exit)
     }
     False -> {
-      let exit = case lvl.exit {
+      case exit {
         ExitTimer(p, t) -> ExitTimer(p, t - 1)
         e -> e
       }
-      Level(..lvl, exit: exit)
     }
   }
 }
 
 fn update_walls(b: Board) -> Board {
-  case b.level.exit {
+  case b.exit {
     ExitTimer(exit, t) if t < 0 -> {
       let w = b.level.w
       let h = b.level.h

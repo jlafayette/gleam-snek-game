@@ -3,8 +3,6 @@ import gleam/float
 import gleam/int
 import gleam/io
 import gleam/list
-import gleam/option.{None, Some}
-import gleam/set
 import lustre
 import lustre/attribute.{type Attribute as Attr}
 import lustre/effect
@@ -554,7 +552,7 @@ fn grid(b: Board, run: Run) {
         let center_offset = int_fraction(size, 0.1)
         svg.g([attr_str("fill", color.grid_lines())], {
           {
-            b.level.walls
+            board.walls(b)
             |> list.map(fn(pos) {
               svg.rect([
                 attr("x", pos.x * size + { offset.x + center_offset }),
@@ -578,10 +576,10 @@ fn grid(b: Board, run: Run) {
           let wall_x = wall_bbox.x + offset.x
           let wall_y = wall_bbox.y + offset.y
           let wall_h = wall_bbox.h
-          let countdown = level_gen.exit_countdown(b.level)
+          let countdown = board.exit_countdown(b.level)
           // centering.. fiddly because 10 is wider than single digits
           let #(countdown_x, countdown_y) = case exit_info.orientation {
-            level_gen.Vertical -> {
+            board.Vertical -> {
               let x = case countdown {
                 10 -> wall_x + 1
                 _ -> wall_x + 6
@@ -589,7 +587,7 @@ fn grid(b: Board, run: Run) {
               let y = wall_y + wall_h - 13
               #(x, y)
             }
-            level_gen.Horizontal -> {
+            board.Horizontal -> {
               let x = case countdown {
                 10 -> wall_x + 11
                 _ -> wall_x + 15
@@ -600,7 +598,7 @@ fn grid(b: Board, run: Run) {
           }
 
           case b.level.exit {
-            level_gen.ExitTimer(_, _) -> {
+            board.ExitTimer(_, _) -> {
               let hilite = color.hsl(126, 90, 61)
               [
                 svg.rect([
@@ -625,7 +623,7 @@ fn grid(b: Board, run: Run) {
                 ]),
               ]
             }
-            level_gen.Exit(_, _) -> {
+            board.Exit(_, _) -> {
               [
                 svg.rect([
                   attr_str("fill", color.grid_border()),
@@ -688,7 +686,7 @@ fn grid(b: Board, run: Run) {
           "lives:" <> int.to_string(run.lives),
         ),
         case b.level.exit {
-          level_gen.Exit(_, to_unlock) -> {
+          board.Exit(_, to_unlock) -> {
             svg.text(
               [
                 attr("x", 240),
@@ -699,7 +697,7 @@ fn grid(b: Board, run: Run) {
               "food to unlock:" <> int.to_string(to_unlock),
             )
           }
-          level_gen.ExitTimer(_, t) -> {
+          board.ExitTimer(_, t) -> {
             let col = case t <= 0 {
               True -> "red"
               False -> "white"

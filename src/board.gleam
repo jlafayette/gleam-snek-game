@@ -2,17 +2,55 @@ import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/order
 import gleam/set
 import level as level_gen
 import player.{type Snek}
-import position.{type Pos, Pos}
+import position.{type Pos, Down, Left, Pos, Right, Up}
 import sound
+
+const width = level_gen.width
+
+const height = level_gen.height
+
+pub type Exit {
+  Exit(pos: Pos, to_unlock: Int)
+  ExitTimer(pos: Pos, timer: Int)
+}
+
+// TODO: move some of this into the grid
+// walls -> grid
+// exit -> grid
+// wall spawn -> grid
+pub type Level {
+  Level(
+    number: Int,
+    exit: Exit,
+    score: Int,
+    eaten: Int,
+    w: Int,
+    h: Int,
+    wall_spawn: List(Pos),
+  )
+}
+
+fn get_level(parsed: level_gen.Parsed) -> Level {
+  Level(
+    number: parsed.number,
+    exit: Exit(parsed.exit_pos, 10),
+    score: 0,
+    eaten: 0,
+    w: width,
+    h: height,
+    wall_spawn: parsed.spawns,
+  )
+}
 
 pub type Grid =
   Dict(Pos, Square)
 
 pub type Board {
-  Board(level: level_gen.Level, grid: Grid, snek: Snek, size: Int)
+  Board(level: Level, grid: Grid, snek: Snek, size: Int)
 }
 
 pub fn food(b: Board) -> List(Pos) {
@@ -20,6 +58,17 @@ pub fn food(b: Board) -> List(Pos) {
   |> list.filter(fn(kv) {
     case kv.1 {
       Square(fg: FgFood, bg: _) -> True
+      _ -> False
+    }
+  })
+  |> list.map(fn(kv) { kv.0 })
+}
+
+pub fn walls(b: Board) -> List(Pos) {
+  dict.to_list(b.grid)
+  |> list.filter(fn(kv) {
+    case kv.1 {
+      Square(fg: _, bg: BgWall) -> True
       _ -> False
     }
   })
@@ -55,8 +104,9 @@ pub opaque type Square {
 
 pub fn init(level_number: Int) -> Board {
   let tile_size = 40
-  let level = level_gen.get(level_number)
-  let snek = player.init(level.snek_pos, level.snek_dir)
+  let parsed = level_gen.get(level_number)
+  let level = parsed |> get_level
+  let snek = player.init(parsed.snek_init, parsed.snek_dir)
   let #(tail_pos, tail_count) = player.tail(snek)
 
   let w = level.w
@@ -64,7 +114,7 @@ pub fn init(level_number: Int) -> Board {
   let grid =
     all_pos(w, h)
     |> list.map(fn(p) {
-      case list.contains(level.walls, p) {
+      case list.contains(parsed.walls, p) {
         True -> #(p, Square(bg: BgWall, fg: FgEmpty))
         False ->
           case tail_pos == p {
@@ -85,14 +135,14 @@ pub fn init(level_number: Int) -> Board {
 
 pub fn update(board: Board) -> #(Board, player.Result) {
   let exit = case board.level.exit {
-    level_gen.Exit(_, _) -> None
-    level_gen.ExitTimer(pos, _) -> Some(pos)
+    Exit(_, _) -> None
+    ExitTimer(pos, _) -> Some(pos)
   }
   let result =
     player.move(
       board.snek,
       set.from_list(food(board)),
-      board.level.walls,
+      walls(board),
       exit,
       board.level.w,
       board.level.h,
@@ -123,8 +173,9 @@ pub fn update(board: Board) -> #(Board, player.Result) {
       ..board,
       grid: grid,
       snek: result.snek,
-      level: level_gen.update(board.level, score_increase, result.snek),
-    ),
+      level: update_level(board.level, score_increase),
+    )
+      |> update_walls,
     result,
   )
 }
@@ -180,6 +231,132 @@ pub fn level_score(b: Board) -> Int {
   b.level.score
 }
 
-pub fn exit_info(b: Board) -> level_gen.ExitInfo {
-  level_gen.exit(b.level.exit.pos, b.level.w, b.level.h)
+pub fn exit_info(b: Board) -> ExitInfo {
+  get_exit_info(b.level.exit.pos, b.level.w, b.level.h)
+}
+
+const abs = int.absolute_value
+
+fn distance(p1: Pos, p2: Pos) -> Int {
+  abs(p1.x - p2.x) + abs(p1.y - p2.y)
+}
+
+fn update_level(lvl: Level, increase: Int) -> Level {
+  let increased = increase > 0
+  case increased {
+    True -> {
+      let eaten = lvl.eaten + 1
+      let exit_revealed = lvl.eaten >= 9
+      let exit = case lvl.exit, exit_revealed {
+        // TODO: base init timer on distance of snake to exit
+        Exit(p, _), True -> {
+          sound.play(sound.DoorOpen)
+          ExitTimer(pos: p, timer: time_to_escape(lvl))
+        }
+        Exit(p, _), False -> Exit(p, 10 - eaten)
+        ExitTimer(p, t), _ -> ExitTimer(p, t - 1)
+      }
+      Level(..lvl, score: lvl.score + increase, eaten: eaten, exit: exit)
+    }
+    False -> {
+      let exit = case lvl.exit {
+        ExitTimer(p, t) -> ExitTimer(p, t - 1)
+        e -> e
+      }
+      Level(..lvl, exit: exit)
+    }
+  }
+}
+
+fn update_walls(b: Board) -> Board {
+  case b.level.exit {
+    ExitTimer(exit, t) if t < 0 -> {
+      let w = b.level.w
+      let h = b.level.h
+      // let exit = Pos(2, 0)
+      // let body = [Pos(0, 0), Pos(0, 1)]
+      let body = b.snek.body
+      let walls = walls(b)
+
+      let candidates =
+        list.range(0, w - 1)
+        |> list.map(fn(x) {
+          list.range(0, h - 1)
+          |> list.map(fn(y) { Pos(x, y) })
+        })
+        |> list.flatten
+        |> list.map(fn(p) { #(p, distance(p, exit)) })
+        |> list.filter(fn(a) {
+          let #(p, _) = a
+          !list.contains(body, p) && !list.contains(walls, p)
+        })
+        |> list.sort(fn(a, b) {
+          let #(_, da) = a
+          let #(_, db) = b
+          case da == db {
+            True -> order.Eq
+            False ->
+              case da < db {
+                // reversed
+                True -> order.Gt
+                False -> order.Lt
+              }
+          }
+        })
+      let new_wall = case candidates {
+        [f, ..] -> Some(f.0)
+        [] -> None
+      }
+      case new_wall {
+        Some(wall) -> {
+          let new_grid =
+            dict.update(b.grid, wall, fn(o) {
+              case o {
+                Some(square) -> Square(..square, bg: BgWall)
+                None -> Square(fg: FgEmpty, bg: BgWall)
+              }
+            })
+          Board(..b, grid: new_grid)
+        }
+        // Level(..lvl, walls: [wall, ..lvl.walls])
+        None -> b
+      }
+    }
+    _ -> b
+  }
+}
+
+fn time_to_escape(lvl: Level) -> Int {
+  lvl.w + lvl.h
+}
+
+pub type Orientation {
+  Horizontal
+  Vertical
+}
+
+pub type ExitInfo {
+  ExitInfo(pos: Pos, wall: Pos, orientation: Orientation)
+}
+
+pub fn get_exit_info(p: Pos, w: Int, h: Int) -> ExitInfo {
+  let w1 = w - 1
+  let h1 = h - 1
+  let dir = case p {
+    Pos(x, _y) if x == 0 -> Left
+    Pos(x, _y) if x == w1 -> Right
+    Pos(_x, y) if y == 0 -> Up
+    Pos(_x, y) if y == h1 -> Down
+    _ -> panic as "Invalid exit"
+  }
+  case dir {
+    Left -> ExitInfo(p, Pos(p.x - 1, p.y), Vertical)
+    Right -> ExitInfo(p, Pos(p.x + 1, p.y), Vertical)
+    Up -> ExitInfo(p, Pos(p.x, p.y - 1), Horizontal)
+    Down -> ExitInfo(p, Pos(p.x, p.y + 1), Horizontal)
+  }
+}
+
+pub fn exit_countdown(lvl: Level) -> Int {
+  int.max(10 - lvl.score, 0)
 }

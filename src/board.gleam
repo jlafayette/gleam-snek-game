@@ -21,21 +21,13 @@ pub type Exit {
 // TODO: move some of this into the grid
 // wall spawn -> grid
 pub type Level {
-  Level(
-    number: Int,
-    score: Int,
-    eaten: Int,
-    w: Int,
-    h: Int,
-    wall_spawn: List(Pos),
-  )
+  Level(number: Int, score: Int, w: Int, h: Int, wall_spawn: List(Pos))
 }
 
 fn get_level(parsed: level_gen.Parsed) -> Level {
   Level(
     number: parsed.number,
     score: 0,
-    eaten: 0,
     w: width,
     h: height,
     wall_spawn: parsed.spawns,
@@ -64,7 +56,7 @@ pub fn walls(b: Board) -> List(Pos) {
   dict.to_list(b.grid)
   |> list.filter(fn(kv) {
     case kv.1 {
-      Square(fg: _, bg: BgWall) -> True
+      Square(fg: FgWall, bg: _) -> True
       _ -> False
     }
   })
@@ -81,7 +73,6 @@ fn all_pos(w: Int, h: Int) -> List(Pos) {
 }
 
 type BgSquare {
-  BgWall
   BgExit
   BgWallSpawn(Int)
   BgEmpty
@@ -92,6 +83,8 @@ type FgSquare {
   FgSnakeTail(Int)
   FgFood
   FgEmpty
+  // doesn't allow head to overlap wall - can fix this later
+  FgWall
 }
 
 pub opaque type Square {
@@ -111,7 +104,7 @@ pub fn init(level_number: Int) -> Board {
     all_pos(w, h)
     |> list.map(fn(p) {
       case list.contains(parsed.walls, p) {
-        True -> #(p, Square(bg: BgWall, fg: FgEmpty))
+        True -> #(p, Square(fg: FgWall, bg: BgEmpty))
         False ->
           case tail_pos == p {
             True -> #(p, Square(bg: BgEmpty, fg: FgSnakeTail(tail_count)))
@@ -165,14 +158,13 @@ pub fn update(board: Board) -> #(Board, player.Result) {
         }
       }
     })
-  let lvl = update_level(board.level, score_increase)
   #(
     Board(
       ..board,
       grid: grid,
       snek: result.snek,
-      exit: update_exit(board.exit, lvl, score_increase),
-      level: lvl,
+      exit: update_exit(board.exit, board.level, score_increase),
+      level: board.level,
     )
       |> update_walls,
     result,
@@ -249,31 +241,22 @@ fn distance(p1: Pos, p2: Pos) -> Int {
   abs(p1.x - p2.x) + abs(p1.y - p2.y)
 }
 
-fn update_level(lvl: Level, increase: Int) -> Level {
-  let increased = increase > 0
-  case increased {
-    True -> {
-      let eaten = lvl.eaten + 1
-      Level(..lvl, score: lvl.score + increase, eaten: eaten)
-    }
-    False -> {
-      lvl
-    }
-  }
-}
-
 fn update_exit(exit: Exit, lvl: Level, increase: Int) -> Exit {
   let increased = increase > 0
+  let to_unlock = case exit, increased {
+    Exit(_, to_unlock), True -> to_unlock - 1
+    _, _ -> 0
+  }
+  let exit_revealed = to_unlock <= 0
   case increased {
     True -> {
-      let exit_revealed = lvl.eaten >= 9
       case exit, exit_revealed {
         // TODO: base init timer on distance of snake to exit
         Exit(p, _), True -> {
           sound.play(sound.DoorOpen)
           ExitTimer(pos: p, timer: time_to_escape(lvl))
         }
-        Exit(p, _), False -> Exit(p, 10 - lvl.eaten)
+        Exit(p, _), False -> Exit(p, to_unlock)
         ExitTimer(p, t), _ -> ExitTimer(p, t - 1)
       }
     }
@@ -291,8 +274,6 @@ fn update_walls(b: Board) -> Board {
     ExitTimer(exit, t) if t < 0 -> {
       let w = b.level.w
       let h = b.level.h
-      // let exit = Pos(2, 0)
-      // let body = [Pos(0, 0), Pos(0, 1)]
       let body = b.snek.body
       let walls = walls(b)
 
@@ -330,13 +311,12 @@ fn update_walls(b: Board) -> Board {
           let new_grid =
             dict.update(b.grid, wall, fn(o) {
               case o {
-                Some(square) -> Square(..square, bg: BgWall)
-                None -> Square(fg: FgEmpty, bg: BgWall)
+                Some(square) -> Square(..square, fg: FgWall)
+                None -> Square(fg: FgWall, bg: BgEmpty)
               }
             })
           Board(..b, grid: new_grid)
         }
-        // Level(..lvl, walls: [wall, ..lvl.walls])
         None -> b
       }
     }
@@ -375,6 +355,9 @@ pub fn get_exit_info(p: Pos, w: Int, h: Int) -> ExitInfo {
   }
 }
 
-pub fn exit_countdown(lvl: Level) -> Int {
-  int.max(10 - lvl.score, 0)
+pub fn exit_countdown(e: Exit) -> Int {
+  case e {
+    Exit(_, to_unlock) -> to_unlock
+    _ -> 0
+  }
 }

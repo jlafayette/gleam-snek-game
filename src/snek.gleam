@@ -576,7 +576,7 @@ fn grid(b: Board, run: Run) {
           let wall_x = wall_bbox.x + offset.x
           let wall_y = wall_bbox.y + offset.y
           let wall_h = wall_bbox.h
-          let countdown = board.exit_countdown(b.level)
+          let countdown = board.exit_countdown(b.exit)
           // centering.. fiddly because 10 is wider than single digits
           let #(countdown_x, countdown_y) = case exit_info.orientation {
             board.Vertical -> {

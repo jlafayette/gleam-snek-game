@@ -577,6 +577,31 @@ fn grid(b: Board, run: Run) {
           }
         })
       },
+      // wall spawns
+      {
+        // TODO: function to center numbers in square
+        //       currently two digit numbers are not centered in x
+        let center_offset_x = int_fraction(size, 0.37)
+        let center_offset_y = int_fraction(size, 0.65)
+        svg.g([attr_str("fill", "red")], {
+          {
+            board.get_wall_spawns(b)
+            |> list.map(fn(pair) {
+              let #(pos, delay) = pair
+              svg.text(
+                [
+                  attr("x", pos.x * size + { offset.x + center_offset_x }),
+                  attr("y", pos.y * size + { offset.y + center_offset_y }),
+                  attr_str("class", "share-tech-mono-regular"),
+                  attr_str("class", "pause-text"),
+                  attr_str("fill", "white"),
+                ],
+                int.to_string(delay),
+              )
+            })
+          }
+        })
+      },
       // exit
       svg.g(
         [

@@ -581,7 +581,7 @@ fn grid(b: Board, run: Run) {
       {
         svg.g([], {
           {
-            board.get_wall_spawns(b)
+            board.get_wall_spawns(b, False)
             |> list.map(fn(pair) {
               let #(pos, delay) = pair
               let col = case delay {

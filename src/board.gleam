@@ -321,7 +321,7 @@ fn update_walls(b: Board) -> Board {
           }
         })
         |> spawn_walls(b.snek)
-        |> tick_down_wall_spawns
+        |> tick_down_wall_spawns(b.snek)
       Board(..b, grid: new_grid)
     }
     _ -> b
@@ -332,11 +332,15 @@ fn spawn_init_delay() -> Int {
   int.random(5) + 8
 }
 
-fn tick_down_wall_spawns(g: Grid) -> Grid {
-  dict.map_values(g, fn(_pos, square) {
+fn tick_down_wall_spawns(g: Grid, snek: Snek) -> Grid {
+  dict.map_values(g, fn(pos, square) {
     case square {
-      Square(fg: _, bg: BgWallSpawn(delay)) ->
-        Square(..square, bg: BgWallSpawn(int.max(0, delay - 1)))
+      Square(fg: _, bg: BgWallSpawn(delay)) -> {
+        case player.body_contains(snek, pos) {
+          True -> square
+          False -> Square(..square, bg: BgWallSpawn(int.max(0, delay - 1)))
+        }
+      }
       _ -> square
     }
   })
@@ -395,10 +399,11 @@ pub fn exit_countdown(e: Exit) -> Int {
   }
 }
 
-pub fn get_wall_spawns(b: Board) -> List(#(Pos, Int)) {
+pub fn get_wall_spawns(b: Board, include_walls: Bool) -> List(#(Pos, Int)) {
   dict.to_list(b.grid)
   |> list.filter(fn(kv) {
     case kv.1 {
+      Square(fg: FgWall, bg: BgWallSpawn(_)) -> include_walls
       Square(fg: _, bg: BgWallSpawn(_)) -> True
       _ -> False
     }
@@ -409,4 +414,15 @@ pub fn get_wall_spawns(b: Board) -> List(#(Pos, Int)) {
       _ -> #(kv.0, 0)
     }
   })
+}
+
+pub fn is_wall(b: Board, pos: Pos) -> Bool {
+  case dict.get(b.grid, pos) {
+    Ok(square) ->
+      case square {
+        Square(fg: FgWall, bg: _) -> True
+        _ -> False
+      }
+    Error(_) -> False
+  }
 }

@@ -579,22 +579,24 @@ fn grid(b: Board, run: Run) {
       },
       // wall spawns
       {
-        // TODO: function to center numbers in square
-        //       currently two digit numbers are not centered in x
-        let center_offset_x = int_fraction(size, 0.37)
-        let center_offset_y = int_fraction(size, 0.65)
-        svg.g([attr_str("fill", "red")], {
+        svg.g([], {
           {
             board.get_wall_spawns(b)
             |> list.map(fn(pair) {
               let #(pos, delay) = pair
+              let col = case delay {
+                x if x >= 8 -> "white"
+                x if x >= 4 -> "orange"
+                _ -> "red"
+              }
+              let center_offset = center_number(delay, size, size)
               svg.text(
                 [
-                  attr("x", pos.x * size + { offset.x + center_offset_x }),
-                  attr("y", pos.y * size + { offset.y + center_offset_y }),
+                  attr("x", pos.x * size + { offset.x + center_offset.x }),
+                  attr("y", pos.y * size + { offset.y + center_offset.y }),
                   attr_str("class", "share-tech-mono-regular"),
                   attr_str("class", "pause-text"),
-                  attr_str("fill", "white"),
+                  attr_str("fill", col),
                 ],
                 int.to_string(delay),
               )
@@ -611,29 +613,6 @@ fn grid(b: Board, run: Run) {
           let exit_info = board.exit_info(b)
           let exit_bbox = to_bbox(exit_info.pos)
           let wall_bbox = to_bbox(exit_info.wall)
-          let wall_x = wall_bbox.x + offset.x
-          let wall_y = wall_bbox.y + offset.y
-          let wall_h = wall_bbox.h
-          let countdown = board.exit_countdown(b.exit)
-          // centering.. fiddly because 10 is wider than single digits
-          let #(countdown_x, countdown_y) = case exit_info.orientation {
-            board.Vertical -> {
-              let x = case countdown {
-                10 -> wall_x + 1
-                _ -> wall_x + 6
-              }
-              let y = wall_y + wall_h - 13
-              #(x, y)
-            }
-            board.Horizontal -> {
-              let x = case countdown {
-                10 -> wall_x + 11
-                _ -> wall_x + 15
-              }
-              let y = wall_y + wall_h - 5
-              #(x, y)
-            }
-          }
 
           case b.exit {
             board.ExitTimer(_, _) -> {
@@ -675,10 +654,17 @@ fn grid(b: Board, run: Run) {
                   ..bbox_to_attrs(wall_bbox, offset)
                 ]),
                 {
+                  let countdown = board.exit_countdown(b.exit)
+                  let countdown_offset =
+                    center_number(countdown, wall_bbox.w, wall_bbox.h)
+                  let pos =
+                    Pos(wall_bbox.x, wall_bbox.y)
+                    |> position.add(offset)
+                    |> position.add(countdown_offset)
                   svg.text(
                     [
-                      attr("x", countdown_x),
-                      attr("y", countdown_y),
+                      attr("x", pos.x),
+                      attr("y", pos.y),
                       attr_str("class", "share-tech-mono-regular"),
                       attr_str("class", "pause-text"),
                       attr_str("fill", "white"),
@@ -776,4 +762,15 @@ fn snek_to_points(snek: List(Pos), size: Int, offset: Pos) -> String {
   })
   |> list.map(fn(pos) { int.to_string(pos.x) <> "," <> int.to_string(pos.y) })
   |> list.fold("", fn(pos, acc) { acc <> " " <> pos })
+}
+
+fn center_number(n: Int, w: Int, h: Int) -> Pos {
+  let text_w = case n > 9 {
+    True -> 9
+    False -> 5
+  }
+  let text_h = 10
+  let x = w / 2 - text_w
+  let y = { h - text_h } / 2
+  Pos(x, h - y)
 }

@@ -149,7 +149,7 @@ pub fn update(board: Board) -> #(Board, player.Result) {
 fn init_wall_spawns(g: Grid, spawns: List(Pos)) -> Grid {
   let spawn_lookup =
     spawns
-    |> list.map2([0, 4, 8, 12], fn(pos, delay) { #(pos, delay) })
+    |> list.map2([4, 8, 12, 16], fn(pos, delay) { #(pos, delay) })
     |> dict.from_list
   g
   |> dict.map_values(fn(p, square) {
@@ -303,7 +303,9 @@ fn update_walls(b: Board) -> Board {
           })
           // filter out snake body
           |> list.filter(fn(pos) { !player.body_contains(b.snek, pos) })
-          |> list.map(fn(pos) { #(pos, Square(..square, bg: BgWallSpawn(9))) })
+          |> list.map(fn(pos) {
+            #(pos, Square(..square, bg: BgWallSpawn(spawn_init_delay())))
+          })
         })
         |> list.flatten
         // convert this to a dict
@@ -324,6 +326,10 @@ fn update_walls(b: Board) -> Board {
     }
     _ -> b
   }
+}
+
+fn spawn_init_delay() -> Int {
+  int.random(5) + 8
 }
 
 fn tick_down_wall_spawns(g: Grid) -> Grid {

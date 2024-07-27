@@ -125,25 +125,14 @@ pub fn update(board: Board) -> #(Board, player.Result) {
     _, _ -> 0
   }
   // add food
-  let grid = update_food(board.grid, result.snek, board.level.w, board.level.h)
-
-  // TODO: move into update_food
-  // delete newly eaten food
-  let grid = case result.ate {
-    True ->
-      dict.update(grid, player.head(result.snek), fn(o) {
-        case o {
-          Some(square) -> {
-            case square {
-              Square(fg: FgFood, bg: _) -> Square(..square, fg: FgEmpty)
-              _ -> square
-            }
-          }
-          None -> Square(fg: FgEmpty, bg: BgEmpty)
-        }
-      })
-    False -> grid
-  }
+  let grid =
+    update_food(
+      board.grid,
+      result.snek,
+      result.ate,
+      board.level.w,
+      board.level.h,
+    )
   #(
     Board(
       ..board,
@@ -200,8 +189,8 @@ fn init_food(g: Grid, w: Int, h: Int) -> Grid {
   }
 }
 
-fn update_food(grid: Grid, snek: Snek, w: Int, h: Int) -> Grid {
-  case int.random(5) {
+fn update_food(grid: Grid, snek: Snek, ate: Bool, w: Int, h: Int) -> Grid {
+  let grid = case int.random(5) {
     0 -> {
       let p = random_pos(w, h)
       case dict.get(grid, p) {
@@ -221,6 +210,22 @@ fn update_food(grid: Grid, snek: Snek, w: Int, h: Int) -> Grid {
     }
     _ -> grid
   }
+  // delete newly eaten food
+  case ate {
+    True ->
+      dict.update(grid, player.head(snek), fn(o) {
+        case o {
+          Some(square) -> {
+            case square {
+              Square(fg: FgFood, bg: _) -> Square(..square, fg: FgEmpty)
+              _ -> square
+            }
+          }
+          None -> Square(fg: FgEmpty, bg: BgEmpty)
+        }
+      })
+    False -> grid
+  }
 }
 
 fn random_pos(w: Int, h: Int) -> Pos {
@@ -234,12 +239,6 @@ pub fn next_level(b: Board) -> Board {
 pub fn exit_info(b: Board) -> ExitInfo {
   get_exit_info(b.exit.pos, b.level.w, b.level.h)
 }
-
-// const abs = int.absolute_value
-
-// fn distance(p1: Pos, p2: Pos) -> Int {
-//   abs(p1.x - p2.x) + abs(p1.y - p2.y)
-// }
 
 fn update_exit(exit: Exit, lvl: Level, increase: Int) -> Exit {
   let increased = increase > 0

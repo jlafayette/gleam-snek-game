@@ -11,10 +11,18 @@ gleam run -m lustre/dev start
 
 ## TODO Ideas
 
+- Refactor
+  - Have draw functions product list of svg elements and a z-index for
+    each one.  Sort them by z-index and draw them separately.  This will
+    allow for parts of exit to be behind and in front of snake without
+    intermixing the code for drawing each one.
+
 - Minor polish
   - draw edge wall on top of snake (except for exiting state)
+  - have snake over exit background for exit but behind exit lines
 
 - Food
+  - Add food spawn sound maybe (bubble pop kind of sound)
   - Adjust spawns so that a certain number of food on board is prioritized
     (otherwise best strategy is to wait around for a long time eating nothing
      before the exit opens to let food build up)
@@ -33,9 +41,6 @@ gleam run -m lustre/dev start
   - Allow more flexibility in control input timing for jog and u-turn
     (jog is going 1 side then back to current direction)
 
-- Level end transition
-  - Have snake head move into wall on first move
-  
 - Add more levels (at least 10)
 
 - Win screen

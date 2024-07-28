@@ -222,7 +222,7 @@ fn update_pause(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       case str {
         "Escape" | "Space" -> {
           sound.play(sound.Unpause)
-          #(Model(..model, keydown: str, state: Play), every(model, Tick))
+          #(Model(..model, keydown: str, state: Play), every(tick_speed, Tick))
         }
         _ -> #(Model(..model, keydown: str), effect.none())
       }
@@ -260,7 +260,6 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         "Space" -> {
           #(
             Model(
-              ..model,
               run: Run(score: 0, level_score: 0, lives: max_lives),
               board: board.init(1),
               keydown: str,

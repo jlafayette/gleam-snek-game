@@ -19,6 +19,13 @@ pub fn head(snek: Snek) -> Pos {
   }
 }
 
+pub fn get_head_safe(snek: Snek) -> Option(Pos) {
+  case snek.body {
+    [head, ..] -> option.Some(head)
+    _ -> option.None
+  }
+}
+
 fn neck(snek: Snek) -> Pos {
   case snek.body {
     [_, neck, ..] -> neck
@@ -73,14 +80,36 @@ pub fn move(
   )
 }
 
-pub fn move_exiting(snek: Snek) -> #(Snek, Bool) {
-  let body = case snek.body {
+pub fn move_exiting(snek: Snek, exit_wall_pos: Pos) -> #(Snek, Bool) {
+  // body with dropped tail and no new head
+  let body1 = case snek.body {
     // get around bug with drop_last
     [_pos] -> []
     _ -> drop_last(snek.body)
   }
-  let new_snek = Snek(..snek, body: body)
-  let done = body == []
+  // Add head on exit wall position if it's not already there
+  let maybe_head = get_head_safe(snek)
+  let body2 = case maybe_head {
+    option.Some(head) -> {
+      case head == exit_wall_pos {
+        True -> body1
+        False -> {
+          let maybe_valid_new_head_list =
+            [position.Up, position.Down, position.Left, position.Right]
+            |> list.map(fn(d) { position.move(head, d) })
+            |> list.filter(fn(pos) { pos == exit_wall_pos })
+
+          case maybe_valid_new_head_list {
+            [new_head_pos, ..] -> [new_head_pos, ..body1]
+            [] -> body1
+          }
+        }
+      }
+    }
+    option.None -> body1
+  }
+  let new_snek = Snek(..snek, body: body2)
+  let done = body2 == []
   #(new_snek, done)
 }
 

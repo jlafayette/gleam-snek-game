@@ -147,7 +147,8 @@ pub fn update(board: Board) -> #(Board, player.Result) {
 }
 
 pub fn update_exiting(board: Board) -> #(Board, Bool) {
-  let #(new_snek, done) = player.move_exiting(board.snek)
+  let exit_info = get_exit_info(board.exit.pos, width, height)
+  let #(new_snek, done) = player.move_exiting(board.snek, exit_info.wall)
   let grid =
     update_food(board.grid, new_snek, False, board.level.w, board.level.h)
   #(

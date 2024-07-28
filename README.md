@@ -27,20 +27,14 @@ gleam run -m lustre/dev start
   - Spawn based on distance (accounting for walls)
   - Play warning sound with new spawn point goes visible
   - Play sound when wall spawns
+  - Improve visuals and sound for spawning to stress players out more
 
 - Snek Control
   - Allow more flexibility in control input timing for jog and u-turn
     (jog is going 1 side then back to current direction)
 
 - Level end transition
-  - Add a game state for Exiting
-  - Have custom logic for advancing in this state (faster ticks, no player control)
-  - Transition trigger when player has fully exited
-  - Improve visuals and sound for exit sequence to stress players out more
-
-- Add tips
-  - On death or maybe at the start of the game, add tips that go over rules or
-    strategies
+  - Have snake head move into wall on first move
   
 - Add more levels (at least 10)
 
@@ -59,4 +53,7 @@ gleam run -m lustre/dev start
 Expansion
 - More levels
 - Local coop
+- Add tips
+  - On death or maybe at the start of the game, add tips that go over rules or
+    strategies
 

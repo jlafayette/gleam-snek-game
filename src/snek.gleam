@@ -44,6 +44,10 @@ fn document_add_event_listener(type_: String, listener: fn(Event) -> Nil) -> Nil
 
 // --- Tick for game update
 
+const tick_speed = 250
+
+const exiting_tick_speed = 50
+
 fn every(interval: Int, tick: msg) -> effect.Effect(msg) {
   effect.from(fn(dispatch) {
     window_set_interval(interval, fn() { dispatch(tick) })
@@ -62,7 +66,7 @@ type GameState {
   Menu
   Play
   Pause
-  Exiting(Int)
+  Exiting
   Died
   GameOver
 }
@@ -74,13 +78,7 @@ type Run {
 }
 
 type Model {
-  Model(
-    board: Board,
-    run: Run,
-    tick_speed: Int,
-    state: GameState,
-    keydown: String,
-  )
+  Model(board: Board, run: Run, state: GameState, keydown: String)
 }
 
 fn init(_flags) -> #(Model, effect.Effect(Msg)) {
@@ -88,7 +86,6 @@ fn init(_flags) -> #(Model, effect.Effect(Msg)) {
     Model(
       board: board.init(1),
       run: Run(score: 0, level_score: 0, lives: max_lives),
-      tick_speed: 250,
       state: Menu,
       keydown: "N/A",
     ),
@@ -113,7 +110,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     Play -> {
       update_play(model, msg)
     }
-    Exiting(_new_level) -> {
+    Exiting -> {
       update_exiting(model, msg)
     }
     Pause -> {
@@ -131,10 +128,7 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 fn update_menu(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) if str == "Space" -> {
-      #(
-        Model(..model, state: Play, keydown: str),
-        every(model.tick_speed, Tick),
-      )
+      #(Model(..model, state: Play, keydown: str), every(tick_speed, Tick))
     }
     Keydown(str) -> #(Model(..model, keydown: str), effect.none())
     _ -> #(model, effect.none())
@@ -186,7 +180,7 @@ fn update_play(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     Tick -> {
       io.debug("tick")
       sound.play(sound.Move)
-      #(update_tick(model), effect.none())
+      update_tick(model)
     }
     TickStart(ms) -> {
       io.debug("tick-start")
@@ -208,7 +202,7 @@ fn update_exiting(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     Tick -> {
       io.debug("tick")
       sound.play(sound.Move)
-      #(update_tick_exiting(model), effect.none())
+      update_tick_exiting(model)
     }
     TickStart(ms) -> {
       io.debug("tick-start")
@@ -228,10 +222,7 @@ fn update_pause(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       case str {
         "Escape" | "Space" -> {
           sound.play(sound.Unpause)
-          #(
-            Model(..model, keydown: str, state: Play),
-            every(model.tick_speed, Tick),
-          )
+          #(Model(..model, keydown: str, state: Play), every(model, Tick))
         }
         _ -> #(Model(..model, keydown: str), effect.none())
       }
@@ -252,7 +243,7 @@ fn update_died(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
               keydown: str,
               state: Play,
             ),
-            every(model.tick_speed, Tick),
+            every(tick_speed, Tick),
           )
         }
         _ -> #(Model(..model, keydown: str), effect.none())
@@ -275,7 +266,7 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
               keydown: str,
               state: Play,
             ),
-            every(model.tick_speed, Tick),
+            every(tick_speed, Tick),
           )
         }
         _ -> #(Model(..model, keydown: str), effect.none())
@@ -285,48 +276,41 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   }
 }
 
-fn update_tick(model: Model) -> Model {
+fn update_tick(model: Model) -> #(Model, effect.Effect(Msg)) {
   let #(new_board, result) = board.update(model.board)
   case result.died {
     True -> {
       sound.play(sound.HitWall)
       let lives = model.run.lives - 1
       case lives == 0 {
-        True ->
+        True -> #(
           Model(
             ..model,
             run: Run(..model.run, lives: lives),
             board: new_board,
             state: GameOver,
-          )
-        False ->
+          ),
+          effect.none(),
+        )
+        False -> #(
           Model(
             ..model,
             run: Run(..model.run, lives: lives),
             board: new_board,
             state: Died,
-          )
+          ),
+          effect.none(),
+        )
       }
     }
     False -> {
       case result.exit {
         True -> {
           sound.play(sound.LevelFinished)
-          // score points
-          // move to next level
-          // move this part to Exiting -> Play
-
-          Model(
-            ..model,
-            board: new_board,
-            state: Exiting(model.board.level.number),
+          #(
+            Model(..model, board: new_board, state: Exiting),
+            every(exiting_tick_speed, Tick),
           )
-          // let score = model.run.score + model.run.level_score
-          // Model(
-          //   ..model,
-          //   run: Run(..model.run, score: score, level_score: 0),
-          //   board: board.next_level(model.board),
-          // )
         }
         False -> {
           // increase level score if ate this turn
@@ -334,12 +318,14 @@ fn update_tick(model: Model) -> Model {
             True -> model.run.level_score + 1
             False -> model.run.level_score
           }
-
-          Model(
-            ..model,
-            run: Run(..model.run, level_score: lvl_score),
-            board: new_board,
-            state: Play,
+          #(
+            Model(
+              ..model,
+              run: Run(..model.run, level_score: lvl_score),
+              board: new_board,
+              state: Play,
+            ),
+            effect.none(),
           )
         }
       }
@@ -347,20 +333,23 @@ fn update_tick(model: Model) -> Model {
   }
 }
 
-fn update_tick_exiting(model: Model) -> Model {
+fn update_tick_exiting(model: Model) -> #(Model, effect.Effect(Msg)) {
   let #(new_board, done) = board.update_exiting(model.board)
   case done {
     True -> {
       let score = model.run.score + model.run.level_score
-      Model(
-        ..model,
-        run: Run(..model.run, score: score, level_score: 0),
-        state: Play,
-        board: board.next_level(model.board),
+      #(
+        Model(
+          ..model,
+          run: Run(..model.run, score: score, level_score: 0),
+          state: Play,
+          board: board.next_level(model.board),
+        ),
+        every(tick_speed, Tick),
       )
     }
     False -> {
-      Model(..model, board: new_board)
+      #(Model(..model, board: new_board), effect.none())
     }
   }
 }
@@ -394,7 +383,7 @@ fn view(model: Model) {
       [grid(model.board, model.run)]
     }
     Play -> [grid(model.board, model.run)]
-    Exiting(_new_level) -> [grid(model.board, model.run)]
+    Exiting -> [grid(model.board, model.run)]
     Pause -> {
       [
         grid(model.board, model.run),

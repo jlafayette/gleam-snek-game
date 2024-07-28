@@ -62,6 +62,7 @@ type GameState {
   Menu
   Play
   Pause
+  Exiting(Int)
   Died
   GameOver
 }
@@ -111,6 +112,9 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     }
     Play -> {
       update_play(model, msg)
+    }
+    Exiting(_new_level) -> {
+      update_exiting(model, msg)
     }
     Pause -> {
       update_pause(model, msg)
@@ -182,7 +186,29 @@ fn update_play(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     Tick -> {
       io.debug("tick")
       sound.play(sound.Move)
-      #(move(model), effect.none())
+      #(update_tick(model), effect.none())
+    }
+    TickStart(ms) -> {
+      io.debug("tick-start")
+      #(model, every(ms, Tick))
+    }
+    TickStop -> {
+      io.debug("tick-stop")
+      let _ = window_clear_interval()
+      #(model, effect.none())
+    }
+  }
+}
+
+fn update_exiting(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
+  case msg {
+    Keydown(str) -> {
+      #(Model(..model, keydown: str), effect.none())
+    }
+    Tick -> {
+      io.debug("tick")
+      sound.play(sound.Move)
+      #(update_tick_exiting(model), effect.none())
     }
     TickStart(ms) -> {
       io.debug("tick-start")
@@ -259,7 +285,7 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   }
 }
 
-fn move(model: Model) -> Model {
+fn update_tick(model: Model) -> Model {
   let #(new_board, result) = board.update(model.board)
   case result.died {
     True -> {
@@ -288,12 +314,19 @@ fn move(model: Model) -> Model {
           sound.play(sound.LevelFinished)
           // score points
           // move to next level
-          let score = model.run.score + model.run.level_score
+          // move this part to Exiting -> Play
+
           Model(
             ..model,
-            run: Run(..model.run, score: score, level_score: 0),
-            board: board.next_level(model.board),
+            board: new_board,
+            state: Exiting(model.board.level.number),
           )
+          // let score = model.run.score + model.run.level_score
+          // Model(
+          //   ..model,
+          //   run: Run(..model.run, score: score, level_score: 0),
+          //   board: board.next_level(model.board),
+          // )
         }
         False -> {
           // increase level score if ate this turn
@@ -310,6 +343,24 @@ fn move(model: Model) -> Model {
           )
         }
       }
+    }
+  }
+}
+
+fn update_tick_exiting(model: Model) -> Model {
+  let #(new_board, done) = board.update_exiting(model.board)
+  case done {
+    True -> {
+      let score = model.run.score + model.run.level_score
+      Model(
+        ..model,
+        run: Run(..model.run, score: score, level_score: 0),
+        state: Play,
+        board: board.next_level(model.board),
+      )
+    }
+    False -> {
+      Model(..model, board: new_board)
     }
   }
 }
@@ -343,6 +394,7 @@ fn view(model: Model) {
       [grid(model.board, model.run)]
     }
     Play -> [grid(model.board, model.run)]
+    Exiting(_new_level) -> [grid(model.board, model.run)]
     Pause -> {
       [
         grid(model.board, model.run),

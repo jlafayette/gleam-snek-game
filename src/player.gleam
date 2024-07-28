@@ -73,6 +73,17 @@ pub fn move(
   )
 }
 
+pub fn move_exiting(snek: Snek) -> #(Snek, Bool) {
+  let body = case snek.body {
+    // get around bug with drop_last
+    [_pos] -> []
+    _ -> drop_last(snek.body)
+  }
+  let new_snek = Snek(..snek, body: body)
+  let done = body == []
+  #(new_snek, done)
+}
+
 fn check_out_of_boards(head: Pos, w: Int, h: Int) -> Bool {
   case head {
     Pos(x, _) if x < 0 -> True

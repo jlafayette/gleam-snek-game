@@ -146,6 +146,17 @@ pub fn update(board: Board) -> #(Board, player.Result) {
   )
 }
 
+pub fn update_exiting(board: Board) -> #(Board, Bool) {
+  let #(new_snek, done) = player.move_exiting(board.snek)
+  let grid =
+    update_food(board.grid, new_snek, False, board.level.w, board.level.h)
+  #(
+    Board(..board, grid: grid, snek: new_snek, level: board.level)
+      |> update_walls,
+    done,
+  )
+}
+
 pub const wall_spawn_min = 10
 
 pub const wall_spawn_max = 16

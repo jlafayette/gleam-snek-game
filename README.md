@@ -37,6 +37,10 @@ gleam run -m lustre/dev start
   - Have custom logic for advancing in this state (faster ticks, no player control)
   - Transition trigger when player has fully exited
   - Improve visuals and sound for exit sequence to stress players out more
+
+- Add tips
+  - On death or maybe at the start of the game, add tips that go over rules or
+    strategies
   
 - Add more levels (at least 10)
 

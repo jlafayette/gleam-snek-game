@@ -531,14 +531,14 @@ fn grid(b: Board, run: Run) {
             line(x1, y, x2, y, grid_line_width)
           }),
       ),
-      // snek
-      draw_snek(b.snek, snek_width, size, offset),
-      // food (draw on top for debugging)
+      // food
       draw_food(board.food(b), food_radius, size, offset),
-      // walls
-      draw_walls(board.walls(b), size, offset),
       // wall spawns
       draw_wall_spawns(board.get_wall_spawns(b), size, offset),
+      // snek
+      draw_snek(b.snek, snek_width, size, offset),
+      // walls
+      draw_walls(board.walls(b), size, offset),
       // exit
       draw_exit(b.exit, board.exit_info(b), to_bbox, offset) |> to_svg_grp,
       // menu bar
@@ -629,8 +629,7 @@ fn draw_wall_spawns(
     {
       wall_spawns
       |> list.filter(fn(info) {
-        !info.has_wall
-        // && info.delay < board.wall_spawn_min
+        !info.has_wall && info.delay < board.wall_spawn_min
       })
       |> list.map(fn(info) {
         let #(text_color, outline_color, outline_opacity) = case info.has_food {

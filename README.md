@@ -15,10 +15,6 @@ gleam run -m lustre/dev start
   - draw edge wall on top of snake (except for exiting state)
 
 - Wall spawn
-  - Walls shouldn't be able to go through the snake - allowing containing a patch
-    as a strategy
-  - Wall spawn happens after the player move, so moving into a spawn-in-1 is allowed
-    and will block it as long as the snake body is in that square
   - Pick random spot along wall (weighted towards edges away from exit)
   - Spawn based on distance (accounting for walls)
 

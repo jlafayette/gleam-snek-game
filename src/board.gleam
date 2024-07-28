@@ -146,10 +146,22 @@ pub fn update(board: Board) -> #(Board, player.Result) {
   )
 }
 
+pub const wall_spawn_min = 10
+
+pub const wall_spawn_max = 16
+
 fn init_wall_spawns(g: Grid, spawns: List(Pos)) -> Grid {
   let spawn_lookup =
     spawns
-    |> list.map2([4, 8, 12, 16], fn(pos, delay) { #(pos, delay) })
+    |> list.map2(
+      [
+        wall_spawn_min + 0,
+        wall_spawn_min + 10,
+        wall_spawn_min + 20,
+        wall_spawn_min + 30,
+      ],
+      fn(pos, delay) { #(pos, delay) },
+    )
     |> dict.from_list
   g
   |> dict.map_values(fn(p, square) {
@@ -269,7 +281,7 @@ fn update_exit(exit: Exit, lvl: Level, increase: Int) -> Exit {
 
 fn update_walls(b: Board) -> Board {
   case b.exit {
-    ExitTimer(_exit, t) if t < 0 -> {
+    ExitTimer(_exit, t) if t < wall_spawn_min -> {
       let w = b.level.w
       let h = b.level.h
 
@@ -329,7 +341,7 @@ fn update_walls(b: Board) -> Board {
 }
 
 fn spawn_init_delay() -> Int {
-  int.random(5) + 8
+  int.random(wall_spawn_max - wall_spawn_min) + wall_spawn_min + 1
 }
 
 fn tick_down_wall_spawns(g: Grid, snek: Snek) -> Grid {
@@ -338,7 +350,7 @@ fn tick_down_wall_spawns(g: Grid, snek: Snek) -> Grid {
       Square(fg: _, bg: BgWallSpawn(delay)) -> {
         case player.body_contains(snek, pos) {
           True -> square
-          False -> Square(..square, bg: BgWallSpawn(int.max(0, delay - 1)))
+          False -> Square(..square, bg: BgWallSpawn(delay - 1))
         }
       }
       _ -> square
@@ -399,19 +411,27 @@ pub fn exit_countdown(e: Exit) -> Int {
   }
 }
 
-pub fn get_wall_spawns(b: Board, include_walls: Bool) -> List(#(Pos, Int)) {
+pub type WallSpawnInfo {
+  WallSpawnInfo(pos: Pos, delay: Int, has_food: Bool, has_wall: Bool)
+}
+
+pub fn get_wall_spawns(b: Board) -> List(WallSpawnInfo) {
   dict.to_list(b.grid)
   |> list.filter(fn(kv) {
     case kv.1 {
-      Square(fg: FgWall, bg: BgWallSpawn(_)) -> include_walls
       Square(fg: _, bg: BgWallSpawn(_)) -> True
       _ -> False
     }
   })
   |> list.map(fn(kv) {
     case kv.1 {
-      Square(fg: _, bg: BgWallSpawn(delay)) -> #(kv.0, delay)
-      _ -> #(kv.0, 0)
+      Square(fg: FgFood, bg: BgWallSpawn(delay)) ->
+        WallSpawnInfo(kv.0, delay, True, False)
+      Square(fg: FgWall, bg: BgWallSpawn(delay)) ->
+        WallSpawnInfo(kv.0, delay, False, True)
+      Square(fg: _, bg: BgWallSpawn(delay)) ->
+        WallSpawnInfo(kv.0, delay, False, False)
+      _ -> WallSpawnInfo(kv.0, 0, False, False)
     }
   })
 }

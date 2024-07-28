@@ -579,28 +579,64 @@ fn grid(b: Board, run: Run) {
       },
       // wall spawns
       {
-        svg.g([], {
+        svg.g([attr_str("fill", "red")], {
           {
-            board.get_wall_spawns(b, False)
-            |> list.map(fn(pair) {
-              let #(pos, delay) = pair
-              let col = case delay {
-                x if x >= 8 -> "white"
-                x if x >= 4 -> "orange"
-                _ -> "red"
-              }
-              let center_offset = center_number(delay, size, size)
-              svg.text(
-                [
-                  attr("x", pos.x * size + { offset.x + center_offset.x }),
-                  attr("y", pos.y * size + { offset.y + center_offset.y }),
-                  attr_str("class", "share-tech-mono-regular"),
-                  attr_str("class", "pause-text"),
-                  attr_str("fill", col),
-                ],
-                int.to_string(delay),
-              )
+            board.get_wall_spawns(b)
+            |> list.filter(fn(info) {
+              !info.has_wall
+              // && info.delay < board.wall_spawn_min
             })
+            |> list.map(fn(info) {
+              let #(text_color, outline_color, outline_opacity) = case
+                info.has_food
+              {
+                True ->
+                  case info.delay {
+                    x if x >= 8 -> #("white", "white", 0.0)
+                    x if x >= 4 -> #("yellow", "orange", 0.3)
+                    _ -> #("orange", "red", 0.5)
+                  }
+                False ->
+                  case info.delay {
+                    x if x >= 8 -> #("white", "white", 0.0)
+                    x if x >= 4 -> #("orange", "orange", 0.3)
+                    _ -> #("red", "red", 0.5)
+                  }
+              }
+              let center_offset = center_number(info.delay, size, size)
+              [
+                svg.text(
+                  [
+                    attr(
+                      "x",
+                      info.pos.x * size + { offset.x + center_offset.x },
+                    ),
+                    attr(
+                      "y",
+                      info.pos.y * size + { offset.y + center_offset.y },
+                    ),
+                    attr_str("class", "share-tech-mono-regular"),
+                    attr_str("class", "pause-text"),
+                    attr_str("fill", text_color),
+                  ],
+                  int.to_string(info.delay),
+                ),
+                {
+                  let rect_size = int_fraction(size, 0.8)
+                  let rect_offset = int_fraction(size, 0.1)
+                  let x = info.pos.x * size + { offset.x + rect_offset }
+                  let y = info.pos.y * size + { offset.y + rect_offset }
+                  rect_outline(
+                    Pos(x, y),
+                    rect_size,
+                    rect_size,
+                    outline_color,
+                    outline_opacity,
+                  )
+                },
+              ]
+            })
+            |> list.flatten
           }
         })
       },
@@ -762,6 +798,29 @@ fn snek_to_points(snek: List(Pos), size: Int, offset: Pos) -> String {
   })
   |> list.map(fn(pos) { int.to_string(pos.x) <> "," <> int.to_string(pos.y) })
   |> list.fold("", fn(pos, acc) { acc <> " " <> pos })
+}
+
+fn rect_outline(
+  pos: Pos,
+  w: Int,
+  h: Int,
+  color: String,
+  opacity: Float,
+) -> element.Element(a) {
+  let line_width = 1
+  let x0 = pos.x
+  let x1 = pos.x + w
+  let y0 = pos.y
+  let y1 = pos.y + h
+  svg.g(
+    [attr_str("stroke", color), attr_str("opacity", float.to_string(opacity))],
+    [
+      line(x0, y0, x1, y0, line_width),
+      line(x0, y0, x0, y1, line_width),
+      line(x0, y1, x1, y1, line_width),
+      line(x1, y0, x1, y1, line_width),
+    ],
+  )
 }
 
 fn center_number(n: Int, w: Int, h: Int) -> Pos {

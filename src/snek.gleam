@@ -532,249 +532,17 @@ fn grid(b: Board, run: Run) {
           }),
       ),
       // snek
-      svg.g(
-        [
-          attr_str("stroke", color.snek()),
-          attr("stroke-width", snek_width),
-          attr_str("fill-opacity", "0"),
-        ],
-        [
-          svg.polyline([
-            attr_str("stroke-linecap", "square"),
-            // attr_str("stroke-linejoin", "round"),
-            // attr_str("points", "20,20 20,60 60,60"),
-            attr_str("points", snek_to_points(b.snek.body, size, offset)),
-          ]),
-        ],
-      ),
+      draw_snek(b.snek, snek_width, size, offset),
       // food (draw on top for debugging)
-      svg.g(
-        [attr_str("fill", color.food()), attr("stroke-width", 0)],
-        board.food(b)
-          |> list.map(fn(pos) {
-            svg.circle([
-              attr("cx", { pos.x * size } + half_size + offset.x),
-              attr("cy", { pos.y * size } + half_size + offset.y),
-              attr("r", food_radius),
-            ])
-          }),
-      ),
+      draw_food(board.food(b), food_radius, size, offset),
       // walls
-      {
-        let wall_size = int_fraction(size, 0.8)
-        let center_offset = int_fraction(size, 0.1)
-        svg.g([attr_str("fill", color.grid_lines())], {
-          {
-            board.walls(b)
-            |> list.map(fn(pos) {
-              svg.rect([
-                attr("x", pos.x * size + { offset.x + center_offset }),
-                attr("y", pos.y * size + { offset.y + center_offset }),
-                attr("width", wall_size),
-                attr("height", wall_size),
-              ])
-            })
-          }
-        })
-      },
+      draw_walls(board.walls(b), size, offset),
       // wall spawns
-      {
-        svg.g([attr_str("fill", "red")], {
-          {
-            board.get_wall_spawns(b)
-            |> list.filter(fn(info) {
-              !info.has_wall
-              // && info.delay < board.wall_spawn_min
-            })
-            |> list.map(fn(info) {
-              let #(text_color, outline_color, outline_opacity) = case
-                info.has_food
-              {
-                True ->
-                  case info.delay {
-                    x if x >= 8 -> #("white", "white", 0.0)
-                    x if x >= 4 -> #("yellow", "orange", 0.3)
-                    _ -> #("orange", "red", 0.5)
-                  }
-                False ->
-                  case info.delay {
-                    x if x >= 8 -> #("white", "white", 0.0)
-                    x if x >= 4 -> #("orange", "orange", 0.3)
-                    _ -> #("red", "red", 0.5)
-                  }
-              }
-              let center_offset = center_number(info.delay, size, size)
-              [
-                svg.text(
-                  [
-                    attr(
-                      "x",
-                      info.pos.x * size + { offset.x + center_offset.x },
-                    ),
-                    attr(
-                      "y",
-                      info.pos.y * size + { offset.y + center_offset.y },
-                    ),
-                    attr_str("class", "share-tech-mono-regular"),
-                    attr_str("class", "pause-text"),
-                    attr_str("fill", text_color),
-                  ],
-                  int.to_string(info.delay),
-                ),
-                {
-                  let rect_size = int_fraction(size, 0.8)
-                  let rect_offset = int_fraction(size, 0.1)
-                  let x = info.pos.x * size + { offset.x + rect_offset }
-                  let y = info.pos.y * size + { offset.y + rect_offset }
-                  rect_outline(
-                    Pos(x, y),
-                    rect_size,
-                    rect_size,
-                    outline_color,
-                    outline_opacity,
-                  )
-                },
-              ]
-            })
-            |> list.flatten
-          }
-        })
-      },
+      draw_wall_spawns(board.get_wall_spawns(b), size, offset),
       // exit
-      svg.g(
-        [
-          // attr_str("fill", "green"), 
-        ],
-        {
-          let exit_info = board.exit_info(b)
-          let exit_bbox = to_bbox(exit_info.pos)
-          let wall_bbox = to_bbox(exit_info.wall)
-
-          case b.exit {
-            board.ExitTimer(_, _) -> {
-              let hilite = color.hsl(126, 90, 61)
-              [
-                svg.rect([
-                  attr_str("fill", hilite),
-                  attr_str("opacity", "0.6"),
-                  ..bbox_to_attrs(exit_bbox, offset)
-                ]),
-                svg.rect([
-                  attr_str("fill", hilite),
-                  attr_str("opacity", "1.0"),
-                  ..bbox_to_attrs(wall_bbox, offset)
-                ]),
-                svg.line([
-                  attr_str("stroke", color.grid_lines()),
-                  attr("stroke-width", 5),
-                  ..bbox_lines(wall_bbox, offset, Down)
-                ]),
-                svg.line([
-                  attr_str("stroke", color.grid_lines()),
-                  attr("stroke-width", 5),
-                  ..bbox_lines(wall_bbox, offset, Up)
-                ]),
-              ]
-            }
-            board.Exit(_, _) -> {
-              [
-                svg.rect([
-                  attr_str("fill", color.grid_border()),
-                  attr_str("opacity", "0.2"),
-                  ..bbox_to_attrs(exit_bbox, offset)
-                ]),
-                svg.rect([
-                  attr_str("fill", color.background()),
-                  attr_str("stroke", color.grid_border()),
-                  attr("stroke-width", 2),
-                  ..bbox_to_attrs(wall_bbox, offset)
-                ]),
-                {
-                  let countdown = board.exit_countdown(b.exit)
-                  let countdown_offset =
-                    center_number(countdown, wall_bbox.w, wall_bbox.h)
-                  let pos =
-                    Pos(wall_bbox.x, wall_bbox.y)
-                    |> position.add(offset)
-                    |> position.add(countdown_offset)
-                  svg.text(
-                    [
-                      attr("x", pos.x),
-                      attr("y", pos.y),
-                      attr_str("class", "share-tech-mono-regular"),
-                      attr_str("class", "pause-text"),
-                      attr_str("fill", "white"),
-                    ],
-                    int.to_string(countdown),
-                  )
-                },
-              ]
-            }
-          }
-        },
-      ),
+      draw_exit(b.exit, board.exit_info(b), to_bbox, offset) |> to_svg_grp,
       // menu bar
-      svg.g([attr("stroke-width", 0), attr_str("fill", color.background())], [
-        svg.rect([
-          attr("x", 0),
-          attr("y", 0),
-          attr("width", w),
-          attr("height", size),
-        ]),
-      ]),
-      svg.g([attr_str("fill", "white")], [
-        svg.text(
-          [
-            attr("x", 8),
-            attr("y", size - 12),
-            attr_str("class", "share-tech-mono-regular"),
-            attr_str("class", "pause-text"),
-          ],
-          "score:"
-            <> int.to_string(run.score + run.level_score)
-            <> "("
-            <> int.to_string(run.level_score)
-            <> ")",
-        ),
-        svg.text(
-          [
-            attr("x", 135),
-            attr("y", size - 12),
-            attr_str("class", "share-tech-mono-regular"),
-            attr_str("class", "pause-text"),
-          ],
-          "lives:" <> int.to_string(run.lives),
-        ),
-        case b.exit {
-          board.Exit(_, to_unlock) -> {
-            svg.text(
-              [
-                attr("x", 240),
-                attr("y", size - 12),
-                attr_str("class", "share-tech-mono-regular"),
-                attr_str("class", "pause-text"),
-              ],
-              "food to unlock:" <> int.to_string(to_unlock),
-            )
-          }
-          board.ExitTimer(_, t) -> {
-            let col = case t <= 0 {
-              True -> "red"
-              False -> "white"
-            }
-            svg.text(
-              [
-                attr("x", 240),
-                attr("y", size - 12),
-                attr_str("class", "share-tech-mono-regular"),
-                attr_str("class", "pause-text"),
-                attr_str("fill", col),
-              ],
-              int.to_string(t),
-            )
-          }
-        },
-      ]),
+      draw_menu_bar(b.exit, run, w, h, size) |> to_svg_grp,
       // borders
       svg.g([attr_str("stroke", color.game_outline())], [
         line(0, 0, w, 0, grid_line_width * 2),
@@ -782,6 +550,24 @@ fn grid(b: Board, run: Run) {
         line(0, 0, 0, h, grid_line_width * 2),
         line(0, h, w, h, grid_line_width * 2),
         line(w, 0, w, h, grid_line_width * 2),
+      ]),
+    ],
+  )
+}
+
+fn draw_snek(snek: player.Snek, snek_width: Int, size: Int, offset: Pos) {
+  svg.g(
+    [
+      attr_str("stroke", color.snek()),
+      attr("stroke-width", snek_width),
+      attr_str("fill-opacity", "0"),
+    ],
+    [
+      svg.polyline([
+        attr_str("stroke-linecap", "square"),
+        // attr_str("stroke-linejoin", "round"),
+        // attr_str("points", "20,20 20,60 60,60"),
+        attr_str("points", snek_to_points(snek.body, size, offset)),
       ]),
     ],
   )
@@ -798,6 +584,247 @@ fn snek_to_points(snek: List(Pos), size: Int, offset: Pos) -> String {
   })
   |> list.map(fn(pos) { int.to_string(pos.x) <> "," <> int.to_string(pos.y) })
   |> list.fold("", fn(pos, acc) { acc <> " " <> pos })
+}
+
+fn draw_food(food: List(Pos), food_radius: Int, size: Int, offset: Pos) {
+  let half_size = size / 2
+
+  svg.g(
+    [attr_str("fill", color.food()), attr("stroke-width", 0)],
+    food
+      |> list.map(fn(pos) {
+        svg.circle([
+          attr("cx", { pos.x * size } + half_size + offset.x),
+          attr("cy", { pos.y * size } + half_size + offset.y),
+          attr("r", food_radius),
+        ])
+      }),
+  )
+}
+
+fn draw_walls(walls: List(Pos), size: Int, offset: Pos) -> element.Element(a) {
+  let wall_size = int_fraction(size, 0.8)
+  let center_offset = int_fraction(size, 0.1)
+  svg.g([attr_str("fill", color.grid_lines())], {
+    {
+      walls
+      |> list.map(fn(pos) {
+        svg.rect([
+          attr("x", pos.x * size + { offset.x + center_offset }),
+          attr("y", pos.y * size + { offset.y + center_offset }),
+          attr("width", wall_size),
+          attr("height", wall_size),
+        ])
+      })
+    }
+  })
+}
+
+fn draw_wall_spawns(
+  wall_spawns: List(board.WallSpawnInfo),
+  size: Int,
+  offset: Pos,
+) -> element.Element(a) {
+  svg.g([attr_str("fill", "red")], {
+    {
+      wall_spawns
+      |> list.filter(fn(info) {
+        !info.has_wall
+        // && info.delay < board.wall_spawn_min
+      })
+      |> list.map(fn(info) {
+        let #(text_color, outline_color, outline_opacity) = case info.has_food {
+          True ->
+            case info.delay {
+              x if x >= 8 -> #("white", "white", 0.0)
+              x if x >= 4 -> #("yellow", "orange", 0.3)
+              _ -> #("orange", "red", 0.5)
+            }
+          False ->
+            case info.delay {
+              x if x >= 8 -> #("white", "white", 0.0)
+              x if x >= 4 -> #("orange", "orange", 0.3)
+              _ -> #("red", "red", 0.5)
+            }
+        }
+        let center_offset = center_number(info.delay, size, size)
+        [
+          svg.text(
+            [
+              attr("x", info.pos.x * size + { offset.x + center_offset.x }),
+              attr("y", info.pos.y * size + { offset.y + center_offset.y }),
+              attr_str("class", "share-tech-mono-regular"),
+              attr_str("class", "pause-text"),
+              attr_str("fill", text_color),
+            ],
+            int.to_string(info.delay),
+          ),
+          {
+            let rect_size = int_fraction(size, 0.8)
+            let rect_offset = int_fraction(size, 0.1)
+            let x = info.pos.x * size + { offset.x + rect_offset }
+            let y = info.pos.y * size + { offset.y + rect_offset }
+            rect_outline(
+              Pos(x, y),
+              rect_size,
+              rect_size,
+              outline_color,
+              outline_opacity,
+            )
+          },
+        ]
+      })
+      |> list.flatten
+    }
+  })
+}
+
+fn to_svg_grp(elems: List(element.Element(a))) -> element.Element(a) {
+  svg.g([], elems)
+}
+
+fn draw_exit(
+  exit: board.Exit,
+  exit_info: board.ExitInfo,
+  to_bbox: fn(Pos) -> position.Bbox,
+  offset: Pos,
+) -> List(element.Element(a)) {
+  let exit_bbox = to_bbox(exit_info.pos)
+  let wall_bbox = to_bbox(exit_info.wall)
+
+  case exit {
+    board.ExitTimer(_, _) -> {
+      let hilite = color.hsl(126, 90, 61)
+      [
+        svg.rect([
+          attr_str("fill", hilite),
+          attr_str("opacity", "0.6"),
+          ..bbox_to_attrs(exit_bbox, offset)
+        ]),
+        svg.rect([
+          attr_str("fill", hilite),
+          attr_str("opacity", "1.0"),
+          ..bbox_to_attrs(wall_bbox, offset)
+        ]),
+        svg.line([
+          attr_str("stroke", color.grid_lines()),
+          attr("stroke-width", 5),
+          ..bbox_lines(wall_bbox, offset, Down)
+        ]),
+        svg.line([
+          attr_str("stroke", color.grid_lines()),
+          attr("stroke-width", 5),
+          ..bbox_lines(wall_bbox, offset, Up)
+        ]),
+      ]
+    }
+    board.Exit(_, _) -> {
+      [
+        svg.rect([
+          attr_str("fill", color.grid_border()),
+          attr_str("opacity", "0.2"),
+          ..bbox_to_attrs(exit_bbox, offset)
+        ]),
+        svg.rect([
+          attr_str("fill", color.background()),
+          attr_str("stroke", color.grid_border()),
+          attr("stroke-width", 2),
+          ..bbox_to_attrs(wall_bbox, offset)
+        ]),
+        {
+          let countdown = board.exit_countdown(exit)
+          let countdown_offset =
+            center_number(countdown, wall_bbox.w, wall_bbox.h)
+          let pos =
+            Pos(wall_bbox.x, wall_bbox.y)
+            |> position.add(offset)
+            |> position.add(countdown_offset)
+          svg.text(
+            [
+              attr("x", pos.x),
+              attr("y", pos.y),
+              attr_str("class", "share-tech-mono-regular"),
+              attr_str("class", "pause-text"),
+              attr_str("fill", "white"),
+            ],
+            int.to_string(countdown),
+          )
+        },
+      ]
+    }
+  }
+}
+
+fn draw_menu_bar(
+  exit: board.Exit,
+  run: Run,
+  w: Int,
+  _h: Int,
+  size: Int,
+) -> List(element.Element(a)) {
+  [
+    svg.g([attr("stroke-width", 0), attr_str("fill", color.background())], [
+      svg.rect([
+        attr("x", 0),
+        attr("y", 0),
+        attr("width", w),
+        attr("height", size),
+      ]),
+    ]),
+    svg.g([attr_str("fill", "white")], [
+      svg.text(
+        [
+          attr("x", 8),
+          attr("y", size - 12),
+          attr_str("class", "share-tech-mono-regular"),
+          attr_str("class", "pause-text"),
+        ],
+        "score:"
+          <> int.to_string(run.score + run.level_score)
+          <> "("
+          <> int.to_string(run.level_score)
+          <> ")",
+      ),
+      svg.text(
+        [
+          attr("x", 135),
+          attr("y", size - 12),
+          attr_str("class", "share-tech-mono-regular"),
+          attr_str("class", "pause-text"),
+        ],
+        "lives:" <> int.to_string(run.lives),
+      ),
+      case exit {
+        board.Exit(_, to_unlock) -> {
+          svg.text(
+            [
+              attr("x", 240),
+              attr("y", size - 12),
+              attr_str("class", "share-tech-mono-regular"),
+              attr_str("class", "pause-text"),
+            ],
+            "food to unlock:" <> int.to_string(to_unlock),
+          )
+        }
+        board.ExitTimer(_, t) -> {
+          let col = case t <= 0 {
+            True -> "red"
+            False -> "white"
+          }
+          svg.text(
+            [
+              attr("x", 240),
+              attr("y", size - 12),
+              attr_str("class", "share-tech-mono-regular"),
+              attr_str("class", "pause-text"),
+              attr_str("fill", col),
+            ],
+            int.to_string(t),
+          )
+        }
+      },
+    ]),
+  ]
 }
 
 fn rect_outline(

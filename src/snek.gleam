@@ -356,6 +356,10 @@ fn update_tick_exiting(model: Model) -> #(Model, effect.Effect(Msg)) {
 // --- View
 const class = attribute.class
 
+type ZElem(a) {
+  ZElem(index: Int, elem: element.Element(a))
+}
+
 fn menu_font_class() {
   class("share-tech-mono-regular")
 }
@@ -379,13 +383,13 @@ fn view(model: Model) {
       //     ]),
       //   ]),
       // ]
-      [grid(model.board, model.run)]
+      [grid(model.board, model.run, model.state)]
     }
-    Play -> [grid(model.board, model.run)]
-    Exiting -> [grid(model.board, model.run)]
+    Play -> [grid(model.board, model.run, model.state)]
+    Exiting -> [grid(model.board, model.run, model.state)]
     Pause -> {
       [
-        grid(model.board, model.run),
+        grid(model.board, model.run, model.state),
         html.div([class("pause-mask")], [
           html.div([class("pause-box")], [
             html.h3([class("pause-header"), menu_font_class()], [text("PAUSED")]),
@@ -398,7 +402,7 @@ fn view(model: Model) {
     }
     Died -> {
       [
-        grid(model.board, model.run),
+        grid(model.board, model.run, model.state),
         html.div([class("pause-mask")], [
           html.div([class("pause-box")], [
             html.h3([class("pause-header"), menu_font_class()], [
@@ -413,7 +417,7 @@ fn view(model: Model) {
     }
     GameOver -> {
       [
-        grid(model.board, model.run),
+        grid(model.board, model.run, model.state),
         html.div([class("pause-mask")], [
           html.div([class("pause-box")], [
             html.h3([class("pause-header"), menu_font_class()], [
@@ -491,7 +495,7 @@ fn bbox_lines(
   }
 }
 
-fn grid(b: Board, run: Run) {
+fn grid(b: Board, run: Run, state: GameState) -> element.Element(a) {
   let size = b.size
   let to_bbox = fn(p: Pos) -> position.Bbox {
     position.to_bbox(p, b.level.w, b.level.h, size)
@@ -532,15 +536,29 @@ fn grid(b: Board, run: Run) {
             ]),
           ],
         ),
-      ]),
-      svg.rect([
-        attr_str("fill", "url(#pattern)"),
-        attr("x", 0),
-        attr("y", 0),
-        attr("width", w),
-        attr("height", h),
-        attr_str("stroke", "#a6a6a6"),
-      ]),
+      ])
+        |> ZElem(0, _)
+        |> list_of_one,
+      // svg.rect([
+      //   attr_str("fill", "url(#pattern)"),
+      //   attr("x", 0),
+      //   attr("y", 0),
+      //   attr("width", half_size),
+      //   attr("height", h),
+      //   attr_str("stroke", "#a6a6a6"),
+      //   attr("stroke-width", 0),
+      // ])
+      //   |> ZElem(4, _)
+      //   |> list_of_one,
+      draw_edge_walls("pattern", w, h, size, offset)
+        |> ZElem(
+          case state == Exiting {
+            True -> 2
+            False -> 4
+          },
+          _,
+        )
+        |> list_of_one,
       svg.rect([
         attr("x", offset.x),
         attr("y", offset.y),
@@ -548,7 +566,9 @@ fn grid(b: Board, run: Run) {
         attr("height", board_h),
         attr("stroke-width", 0),
         attr_str("fill", color.grid_background()),
-      ]),
+      ])
+        |> ZElem(0, _)
+        |> list_of_one,
       // vertical grid lines
       svg.g(
         [attr_str("stroke", color.grid_lines())],
@@ -559,7 +579,9 @@ fn grid(b: Board, run: Run) {
             let y2 = offset.y + board_h
             line(x, y1, x, y2, grid_line_width)
           }),
-      ),
+      )
+        |> ZElem(1, _)
+        |> list_of_one,
       // horizontal grid lines
       svg.g(
         [attr_str("stroke", color.grid_lines())],
@@ -570,19 +592,25 @@ fn grid(b: Board, run: Run) {
             let x2 = offset.x + board_w
             line(x1, y, x2, y, grid_line_width)
           }),
-      ),
+      )
+        |> ZElem(1, _)
+        |> list_of_one,
       // food
-      draw_food(board.food(b), food_radius, size, offset),
+      draw_food(board.food(b), food_radius, size, offset)
+        |> ZElem(2, _)
+        |> list_of_one,
       // wall spawns
-      draw_wall_spawns(board.get_wall_spawns(b), size, offset),
+      draw_wall_spawns(board.get_wall_spawns(b), size, offset)
+        |> ZElem(2, _)
+        |> list_of_one,
       // snek
-      draw_snek(b.snek, snek_width, size, offset),
+      draw_snek(b.snek, snek_width, size, offset) |> ZElem(3, _) |> list_of_one,
       // walls
-      draw_walls(board.walls(b), size, offset),
+      draw_walls(board.walls(b), size, offset) |> ZElem(4, _) |> list_of_one,
       // exit
-      draw_exit(b.exit, board.exit_info(b), to_bbox, offset) |> to_svg_grp,
+      draw_exit(b.exit, board.exit_info(b), state, to_bbox, offset),
       // menu bar
-      draw_menu_bar(b.exit, run, w, h, size) |> to_svg_grp,
+      draw_menu_bar(b.exit, run, w, h, size) |> list.map(ZElem(4, _)),
       // borders
       svg.g([attr_str("stroke", color.game_outline())], [
         line(0, 0, w, 0, grid_line_width * 2),
@@ -590,10 +618,24 @@ fn grid(b: Board, run: Run) {
         line(0, 0, 0, h, grid_line_width * 2),
         line(0, h, w, h, grid_line_width * 2),
         line(w, 0, w, h, grid_line_width * 2),
-      ]),
-    ],
+      ])
+        |> ZElem(4, _)
+        |> list_of_one,
+    ]
+      |> list.flatten
+      |> list.sort(fn(e1: ZElem(a), e2: ZElem(a)) {
+        int.compare(e1.index, e2.index)
+      })
+      |> list.map(fn(e: ZElem(a)) { e.elem }),
   )
 }
+
+fn list_of_one(elem: a) -> List(a) {
+  [elem]
+}
+
+// [ZElems, ZElems, ..]
+// [[z, z, z], [z], [z]] |> flatten |> sort
 
 fn draw_snek(snek: player.Snek, snek_width: Int, size: Int, offset: Pos) {
   svg.g(
@@ -640,6 +682,55 @@ fn draw_food(food: List(Pos), food_radius: Int, size: Int, offset: Pos) {
         ])
       }),
   )
+}
+
+fn draw_edge_walls(
+  pattern: String,
+  w: Int,
+  h: Int,
+  size: Int,
+  offset: Pos,
+) -> element.Element(a) {
+  let fill = "url(#" <> pattern <> ")"
+
+  let path_m = fn(p: String, x: Int, y: Int) -> String {
+    p <> "M " <> int.to_string(x) <> " " <> int.to_string(y)
+  }
+  let path_h = fn(p: String, a: Int) -> String {
+    p <> " h " <> int.to_string(a)
+  }
+  let path_v = fn(p: String, a: Int) -> String {
+    p <> " v " <> int.to_string(a)
+  }
+  let path_z = fn(p: String) -> String { p <> " z" }
+
+  let wi = w - size
+  let hi = h - { size * 2 }
+  let path =
+    path_m("", 0, size)
+    |> path_h(w)
+    |> path_v(h)
+    |> path_h(-w)
+    |> path_z
+    <> " "
+    |> path_m(offset.x, offset.y)
+    |> path_h(wi)
+    |> path_v(hi)
+    |> path_h(-wi)
+    |> path_z
+
+  svg.g([attr_str("fill-rule", "evenodd")], [
+    svg.path([
+      attr_str("fill", color.background()),
+      attr_str("d", path),
+      attr("stroke-width", 0),
+    ]),
+    svg.path([
+      attr_str("fill", fill),
+      attr_str("d", path),
+      attr("stroke-width", 0),
+    ]),
+  ])
 }
 
 fn draw_walls(walls: List(Pos), size: Int, offset: Pos) -> element.Element(a) {
@@ -718,43 +809,51 @@ fn draw_wall_spawns(
   })
 }
 
-fn to_svg_grp(elems: List(element.Element(a))) -> element.Element(a) {
-  svg.g([], elems)
-}
-
 fn draw_exit(
   exit: board.Exit,
   exit_info: board.ExitInfo,
+  state: GameState,
   to_bbox: fn(Pos) -> position.Bbox,
   offset: Pos,
-) -> List(element.Element(a)) {
+) -> List(ZElem(a)) {
   let exit_bbox = to_bbox(exit_info.pos)
   let wall_bbox = to_bbox(exit_info.wall)
+
+  let behind = 2
+  let infront = 4
 
   case exit {
     board.ExitTimer(_, _) -> {
       let hilite = color.hsl(126, 90, 61)
+      let exiting_behind = case state == Exiting {
+        True -> behind
+        False -> infront
+      }
       [
         svg.rect([
           attr_str("fill", hilite),
           attr_str("opacity", "0.6"),
           ..bbox_to_attrs(exit_bbox, offset)
-        ]),
+        ])
+          |> ZElem(behind, _),
         svg.rect([
           attr_str("fill", hilite),
           attr_str("opacity", "1.0"),
           ..bbox_to_attrs(wall_bbox, offset)
-        ]),
+        ])
+          |> ZElem(exiting_behind, _),
         svg.line([
           attr_str("stroke", color.grid_lines()),
           attr("stroke-width", 5),
           ..bbox_lines(wall_bbox, offset, Down)
-        ]),
+        ])
+          |> ZElem(exiting_behind, _),
         svg.line([
           attr_str("stroke", color.grid_lines()),
           attr("stroke-width", 5),
           ..bbox_lines(wall_bbox, offset, Up)
-        ]),
+        ])
+          |> ZElem(exiting_behind, _),
       ]
     }
     board.Exit(_, _) -> {
@@ -763,13 +862,15 @@ fn draw_exit(
           attr_str("fill", color.grid_border()),
           attr_str("opacity", "0.2"),
           ..bbox_to_attrs(exit_bbox, offset)
-        ]),
+        ])
+          |> ZElem(infront, _),
         svg.rect([
           attr_str("fill", color.background()),
           attr_str("stroke", color.grid_border()),
           attr("stroke-width", 2),
           ..bbox_to_attrs(wall_bbox, offset)
-        ]),
+        ])
+          |> ZElem(infront, _),
         {
           let countdown = board.exit_countdown(exit)
           let countdown_offset =
@@ -788,6 +889,7 @@ fn draw_exit(
             ],
             int.to_string(countdown),
           )
+          |> ZElem(infront, _)
         },
       ]
     }

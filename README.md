@@ -11,16 +11,6 @@ gleam run -m lustre/dev start
 
 ## TODO Ideas
 
-- Refactor
-  - Have draw functions product list of svg elements and a z-index for
-    each one.  Sort them by z-index and draw them separately.  This will
-    allow for parts of exit to be behind and in front of snake without
-    intermixing the code for drawing each one.
-
-- Minor polish
-  - draw edge wall on top of snake (except for exiting state)
-  - have snake over exit background for exit but behind exit lines
-
 - Food
   - Add food spawn sound maybe (bubble pop kind of sound)
   - Adjust spawns so that a certain number of food on board is prioritized
@@ -34,8 +24,11 @@ gleam run -m lustre/dev start
   - Pick random spot along wall (weighted towards edges away from exit)
   - Spawn based on distance (accounting for walls)
   - Play warning sound with new spawn point goes visible
-  - Play sound when wall spawns
-  - Improve visuals and sound for spawning to stress players out more
+  - Play sound when wall spawns (thunk + rocks rattle)
+  - Add ticking clock sound or something that indicates the incoming walls.
+    Play this after the exit opens but slightly before the first walls spawn.
+    Maybe right when the first numbers appear and start ticking down.
+  - Maybe play alarm sound for spawning to stress players out more
 
 - Snek Control
   - Allow more flexibility in control input timing for jog and u-turn

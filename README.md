@@ -31,8 +31,9 @@ gleam run -m lustre/dev start
   - Maybe play alarm sound for spawning to stress players out more
 
 - Snek Control
-  - Allow more flexibility in control input timing for jog and u-turn
-    (jog is going 1 side then back to current direction)
+  Instead of late move logic, try shortening the length of a tick
+  if the user enters a second keypress within some fraction of the
+  end of the tick
 
 - Add more levels (at least 10)
 

@@ -1,10 +1,7 @@
-import gleam/bool
 import gleam/float
 import gleam/int
 import gleam/io
 import gleam/list
-import gleam/option
-import gleam/set
 import lustre
 import lustre/attribute.{type Attribute as Attr}
 import lustre/effect
@@ -33,7 +30,6 @@ pub fn main() {
     |> lustre.dispatch
     |> send_to_runtime
   })
-  Nil
 }
 
 // --- Keyboard Input
@@ -51,6 +47,16 @@ fn document_add_event_listener(type_: String, listener: fn(Event) -> Nil) -> Nil
 const tick_speed = time.tick_speed
 
 const exiting_tick_speed = 50
+
+fn f_every(interval: Int, tick: msg) -> effect.Effect(msg) {
+  [
+    effect.from(fn(dispatch) { dispatch(tick) }),
+    effect.from(fn(dispatch) {
+      window_set_interval(interval, fn() { dispatch(tick) })
+    }),
+  ]
+  |> effect.batch
+}
 
 fn every(interval: Int, tick: msg) -> effect.Effect(msg) {
   effect.from(fn(dispatch) {
@@ -102,8 +108,13 @@ fn init(_flags) -> #(Model, effect.Effect(Msg)) {
 type Msg {
   Keydown(String)
   Tick
+  TickSkip
   TickStart(Int)
   TickStop
+}
+
+fn tick_skip() -> effect.Effect(Msg) {
+  effect.from(fn(dispatch) { dispatch(TickSkip) })
 }
 
 fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
@@ -156,7 +167,7 @@ fn update_play(
         _ -> level_num
       }
       let late = time.late(last_tick_ms)
-      let #(new_state, new_snek) = case str {
+      let #(new_state, #(new_snek, new_turn)) = case str {
         "KeyW" | "ArrowUp" -> #(
           Play(last_tick_ms),
           player.keypress(Up, late, board.move_args(model.board)),
@@ -176,9 +187,9 @@ fn update_play(
         "Escape" | "Space" -> {
           let _ = window_clear_interval()
           sound.play(sound.Pause)
-          #(Pause, model.board.snek)
+          #(Pause, #(model.board.snek, False))
         }
-        _ -> #(Play(last_tick_ms), model.board.snek)
+        _ -> #(Play(last_tick_ms), #(model.board.snek, False))
       }
       case new_level == level_num {
         False -> {
@@ -194,7 +205,10 @@ fn update_play(
             keydown: str,
             state: new_state,
           ),
-          effect.none(),
+          case new_turn {
+            True -> tick_skip()
+            False -> effect.none()
+          },
         )
       }
     }
@@ -202,6 +216,11 @@ fn update_play(
       io.debug("tick")
       sound.play(sound.Move)
       update_tick(model)
+    }
+    TickSkip -> {
+      io.debug("tick-skip")
+      let _ = window_clear_interval()
+      #(model, f_every(time.tick_speed, Tick))
     }
     TickStart(ms) -> {
       io.debug("tick-start")
@@ -224,6 +243,9 @@ fn update_exiting(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       io.debug("tick")
       sound.play(sound.Move)
       update_tick_exiting(model)
+    }
+    TickSkip -> {
+      #(model, effect.none())
     }
     TickStart(ms) -> {
       io.debug("tick-start")
@@ -638,15 +660,17 @@ fn draw_board(b: Board, run: Run, state: GameState) -> element.Element(a) {
       // exit
       draw_exit(b.exit, board.exit_info(b), state, to_bbox, offset),
       // draw snek inputs
-      draw_snek_input(
-        b.snek,
-        last_tick_ms,
-        int_fraction(size, 0.1),
-        size,
-        offset,
-      )
-        |> ZElem(5, _)
-        |> list_of_one,
+      // TODO: replace this with something subtle like snake eye direction
+      //       or something
+      // draw_snek_input(
+      //   b.snek,
+      //   last_tick_ms,
+      //   int_fraction(size, 0.1),
+      //   size,
+      //   offset,
+      // )
+      //   |> ZElem(5, _)
+      //   |> list_of_one,
       // menu bar
       draw_menu_bar(b.exit, run, last_tick_ms, w, h, size)
         |> list.map(ZElem(4, _)),
@@ -673,9 +697,6 @@ fn list_of_one(elem: a) -> List(a) {
   [elem]
 }
 
-// [ZElems, ZElems, ..]
-// [[z, z, z], [z], [z]] |> flatten |> sort
-
 fn draw_snek(snek: player.Snek, snek_width: Int, size: Int, offset: Pos) {
   svg.g(
     [
@@ -686,8 +707,6 @@ fn draw_snek(snek: player.Snek, snek_width: Int, size: Int, offset: Pos) {
     [
       svg.polyline([
         attr_str("stroke-linecap", "square"),
-        // attr_str("stroke-linejoin", "round"),
-        // attr_str("points", "20,20 20,60 60,60"),
         attr_str("points", snek_to_points(snek.body, size, offset)),
       ]),
     ],
@@ -963,7 +982,7 @@ fn draw_exit(
 fn draw_menu_bar(
   exit: board.Exit,
   run: Run,
-  last_tick_ms: Int,
+  _last_tick_ms: Int,
   w: Int,
   _h: Int,
   size: Int,
@@ -1029,18 +1048,6 @@ fn draw_menu_bar(
           )
         }
       },
-      svg.text(
-        [
-          attr("x", 500),
-          attr("y", size - 12),
-          attr_str("class", "share-tech-mono-regular"),
-          attr_str("class", "pause-text"),
-        ],
-        "ms:"
-          <> int.to_string(time.get() - last_tick_ms)
-          <> " "
-          <> bool.to_string(time.late(last_tick_ms)),
-      ),
     ]),
   ]
 }

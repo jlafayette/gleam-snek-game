@@ -186,7 +186,7 @@ fn unsafe_moves_to_input(moves: List(Move)) -> Input {
   }
 }
 
-pub fn keypress(move: Move, late: Bool, args: MoveArgs) -> Snek {
+pub fn keypress(move: Move, late: Bool, args: MoveArgs) -> #(Snek, Bool) {
   let snek = args.snek
   // simulate what would happen exactly
   // for 1 or 2 moves in the future and accept and reject
@@ -194,7 +194,7 @@ pub fn keypress(move: Move, late: Bool, args: MoveArgs) -> Snek {
   // the goal is to give a little lee-way in input timing at the
   // end of a tick (late=True)
 
-  let new = case late {
+  let #(new, skip) = case late {
     True -> {
       // If late=True we need to simulate the result of making the
       // new input now, vs doing the current input and then the new
@@ -208,7 +208,7 @@ pub fn keypress(move: Move, late: Bool, args: MoveArgs) -> Snek {
       // 'in-control' for the player
 
       let two_moves = case snek.input {
-        InputNone -> [snek.dir, move]
+        InputNone -> [move]
         Input(mv) -> [mv, move]
         // note, we could simulate both cases here
         InputLate(mv, _mv2) -> [mv, move]
@@ -217,18 +217,18 @@ pub fn keypress(move: Move, late: Bool, args: MoveArgs) -> Snek {
       let one_result = simulate_moves([move], args)
       let no_result = simulate_moves([snek.dir], args)
 
-      let moves_to_use = case
+      let #(moves_to_use, skip) = case
         one_result.is_dead,
         two_result.is_dead,
         no_result.is_dead
       {
-        False, False, _ -> two_moves
-        True, False, _ -> two_moves
-        False, True, _ -> [move]
-        True, True, False -> [snek.dir]
-        True, True, True -> [move]
+        False, False, _ -> #(two_moves, True)
+        True, False, _ -> #(two_moves, True)
+        False, True, _ -> #([move], True)
+        True, True, False -> #([snek.dir], False)
+        True, True, True -> #([move], False)
       }
-      unsafe_moves_to_input(moves_to_use)
+      #(unsafe_moves_to_input(moves_to_use), skip)
     }
     False -> {
       // If late=False, nothing complicated needs to happen, just
@@ -239,13 +239,14 @@ pub fn keypress(move: Move, late: Bool, args: MoveArgs) -> Snek {
       let accepted = Input(move)
       let rejected = snek.input
       let neck_collide = position.move(head(snek), move) == neck(snek)
-      case neck_collide {
+      let new_input = case neck_collide {
         True -> rejected
         False -> accepted
       }
+      #(new_input, False)
     }
   }
-  Snek(..snek, input: new)
+  #(Snek(..snek, input: new), skip)
 }
 
 fn new_head(snek: Snek) -> #(Pos, Input, Move) {

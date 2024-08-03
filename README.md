@@ -30,11 +30,6 @@ gleam run -m lustre/dev start
     Maybe right when the first numbers appear and start ticking down.
   - Maybe play alarm sound for spawning to stress players out more
 
-- Snek Control
-  Instead of late move logic, try shortening the length of a tick
-  if the user enters a second keypress within some fraction of the
-  end of the tick
-
 - Add more levels (at least 10)
 
 - Win screen

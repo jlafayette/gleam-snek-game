@@ -42,6 +42,10 @@ gleam run -m lustre/dev start
 - Logging
 - Better snake graphics (simple head/tail)
 
+- Minor adjustments
+  - Don't block the board entirely with Died/GameOver screen, players
+    need to see how they died
+
 - Player stats at game-end screen (requires server and DB)
 
 - Music

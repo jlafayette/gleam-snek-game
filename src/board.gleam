@@ -103,20 +103,22 @@ pub fn init(level_number: Int) -> Board {
   Board(level, grid, snek, Exit(parsed.exit_pos, 10), tile_size)
 }
 
+pub fn move_args(b: Board) -> player.MoveArgs {
+  player.MoveArgs(
+    b.snek,
+    set.from_list(food(b)),
+    walls(b),
+    case b.exit {
+      Exit(_, _) -> option.None
+      ExitTimer(pos, _) -> option.Some(pos)
+    },
+    b.level.w,
+    b.level.h,
+  )
+}
+
 pub fn update(board: Board) -> #(Board, player.Result) {
-  let exit = case board.exit {
-    Exit(_, _) -> None
-    ExitTimer(pos, _) -> Some(pos)
-  }
-  let result =
-    player.move(
-      board.snek,
-      set.from_list(food(board)),
-      walls(board),
-      exit,
-      board.level.w,
-      board.level.h,
-    )
+  let result = player.move(move_args(board))
   let score_increase = case result.died, result.ate {
     False, True -> {
       sound.play(sound.Eat)

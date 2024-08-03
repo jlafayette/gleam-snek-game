@@ -1,8 +1,10 @@
-import color
+import gleam/bool
 import gleam/float
 import gleam/int
 import gleam/io
 import gleam/list
+import gleam/option
+import gleam/set
 import lustre
 import lustre/attribute.{type Attribute as Attr}
 import lustre/effect
@@ -11,10 +13,12 @@ import lustre/element/html
 import lustre/element/svg
 
 import board.{type Board, Board}
+import color
 import level as level_gen
 import player
 import position.{type Pos, Down, Left, Pos, Right, Up}
 import sound
+import time
 
 // --- Main 
 
@@ -44,7 +48,7 @@ fn document_add_event_listener(type_: String, listener: fn(Event) -> Nil) -> Nil
 
 // --- Tick for game update
 
-const tick_speed = 250
+const tick_speed = time.tick_speed
 
 const exiting_tick_speed = 50
 
@@ -64,7 +68,7 @@ fn window_clear_interval() -> Nil
 
 type GameState {
   Menu
-  Play
+  Play(Int)
   Pause
   Exiting
   Died
@@ -107,8 +111,8 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
     Menu -> {
       update_menu(model, msg)
     }
-    Play -> {
-      update_play(model, msg)
+    Play(ms) -> {
+      update_play(model, msg, ms)
     }
     Exiting -> {
       update_exiting(model, msg)
@@ -128,14 +132,21 @@ fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
 fn update_menu(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) if str == "Space" -> {
-      #(Model(..model, state: Play, keydown: str), every(tick_speed, Tick))
+      #(
+        Model(..model, state: Play(time.get()), keydown: str),
+        every(tick_speed, Tick),
+      )
     }
     Keydown(str) -> #(Model(..model, keydown: str), effect.none())
     _ -> #(model, effect.none())
   }
 }
 
-fn update_play(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
+fn update_play(
+  model: Model,
+  msg: Msg,
+  last_tick_ms: Int,
+) -> #(Model, effect.Effect(Msg)) {
   case msg {
     Keydown(str) -> {
       let level_num = model.board.level.number
@@ -144,20 +155,30 @@ fn update_play(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
         "Period" -> level_gen.clamp(level_num + 1)
         _ -> level_num
       }
+      let late = time.late(last_tick_ms)
       let #(new_state, new_snek) = case str {
-        "KeyW" | "ArrowUp" -> #(Play, player.keypress(model.board.snek, Up))
-        "KeyA" | "ArrowLeft" -> #(Play, player.keypress(model.board.snek, Left))
-        "KeyS" | "ArrowDown" -> #(Play, player.keypress(model.board.snek, Down))
+        "KeyW" | "ArrowUp" -> #(
+          Play(last_tick_ms),
+          player.keypress(Up, late, board.move_args(model.board)),
+        )
+        "KeyA" | "ArrowLeft" -> #(
+          Play(last_tick_ms),
+          player.keypress(Left, late, board.move_args(model.board)),
+        )
+        "KeyS" | "ArrowDown" -> #(
+          Play(last_tick_ms),
+          player.keypress(Down, late, board.move_args(model.board)),
+        )
         "KeyD" | "ArrowRight" -> #(
-          Play,
-          player.keypress(model.board.snek, Right),
+          Play(last_tick_ms),
+          player.keypress(Right, late, board.move_args(model.board)),
         )
         "Escape" | "Space" -> {
           let _ = window_clear_interval()
           sound.play(sound.Pause)
           #(Pause, model.board.snek)
         }
-        _ -> #(Play, model.board.snek)
+        _ -> #(Play(last_tick_ms), model.board.snek)
       }
       case new_level == level_num {
         False -> {
@@ -222,7 +243,10 @@ fn update_pause(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       case str {
         "Escape" | "Space" -> {
           sound.play(sound.Unpause)
-          #(Model(..model, keydown: str, state: Play), every(tick_speed, Tick))
+          #(
+            Model(..model, keydown: str, state: Play(time.get())),
+            every(tick_speed, Tick),
+          )
         }
         _ -> #(Model(..model, keydown: str), effect.none())
       }
@@ -241,7 +265,7 @@ fn update_died(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
               ..model,
               board: board.init(model.board.level.number),
               keydown: str,
-              state: Play,
+              state: Play(time.get()),
             ),
             every(tick_speed, Tick),
           )
@@ -263,7 +287,7 @@ fn update_game_over(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
               run: Run(score: 0, level_score: 0, lives: max_lives),
               board: board.init(1),
               keydown: str,
-              state: Play,
+              state: Play(time.get()),
             ),
             every(tick_speed, Tick),
           )
@@ -322,7 +346,7 @@ fn update_tick(model: Model) -> #(Model, effect.Effect(Msg)) {
               ..model,
               run: Run(..model.run, level_score: lvl_score),
               board: new_board,
-              state: Play,
+              state: Play(time.get()),
             ),
             effect.none(),
           )
@@ -341,7 +365,7 @@ fn update_tick_exiting(model: Model) -> #(Model, effect.Effect(Msg)) {
         Model(
           ..model,
           run: Run(..model.run, score: score, level_score: 0),
-          state: Play,
+          state: Play(time.get()),
           board: board.next_level(model.board),
         ),
         every(tick_speed, Tick),
@@ -383,13 +407,13 @@ fn view(model: Model) {
       //     ]),
       //   ]),
       // ]
-      [grid(model.board, model.run, model.state)]
+      [draw_board(model.board, model.run, model.state)]
     }
-    Play -> [grid(model.board, model.run, model.state)]
-    Exiting -> [grid(model.board, model.run, model.state)]
+    Play(_last_tick_ms) -> [draw_board(model.board, model.run, model.state)]
+    Exiting -> [draw_board(model.board, model.run, model.state)]
     Pause -> {
       [
-        grid(model.board, model.run, model.state),
+        draw_board(model.board, model.run, model.state),
         html.div([class("pause-mask")], [
           html.div([class("pause-box")], [
             html.h3([class("pause-header"), menu_font_class()], [text("PAUSED")]),
@@ -402,7 +426,7 @@ fn view(model: Model) {
     }
     Died -> {
       [
-        grid(model.board, model.run, model.state),
+        draw_board(model.board, model.run, model.state),
         html.div([class("pause-mask")], [
           html.div([class("pause-box")], [
             html.h3([class("pause-header"), menu_font_class()], [
@@ -417,7 +441,7 @@ fn view(model: Model) {
     }
     GameOver -> {
       [
-        grid(model.board, model.run, model.state),
+        draw_board(model.board, model.run, model.state),
         html.div([class("pause-mask")], [
           html.div([class("pause-box")], [
             html.h3([class("pause-header"), menu_font_class()], [
@@ -495,7 +519,11 @@ fn bbox_lines(
   }
 }
 
-fn grid(b: Board, run: Run, state: GameState) -> element.Element(a) {
+fn draw_board(b: Board, run: Run, state: GameState) -> element.Element(a) {
+  let last_tick_ms = case state {
+    Play(ms) -> ms
+    _ -> 0
+  }
   let size = b.size
   let to_bbox = fn(p: Pos) -> position.Bbox {
     position.to_bbox(p, b.level.w, b.level.h, size)
@@ -609,8 +637,19 @@ fn grid(b: Board, run: Run, state: GameState) -> element.Element(a) {
       draw_walls(board.walls(b), size, offset) |> ZElem(4, _) |> list_of_one,
       // exit
       draw_exit(b.exit, board.exit_info(b), state, to_bbox, offset),
+      // draw snek inputs
+      draw_snek_input(
+        b.snek,
+        last_tick_ms,
+        int_fraction(size, 0.1),
+        size,
+        offset,
+      )
+        |> ZElem(5, _)
+        |> list_of_one,
       // menu bar
-      draw_menu_bar(b.exit, run, w, h, size) |> list.map(ZElem(4, _)),
+      draw_menu_bar(b.exit, run, last_tick_ms, w, h, size)
+        |> list.map(ZElem(4, _)),
       // borders
       svg.g([attr_str("stroke", color.game_outline())], [
         line(0, 0, w, 0, grid_line_width * 2),
@@ -652,6 +691,31 @@ fn draw_snek(snek: player.Snek, snek_width: Int, size: Int, offset: Pos) {
         attr_str("points", snek_to_points(snek.body, size, offset)),
       ]),
     ],
+  )
+}
+
+fn draw_snek_input(
+  snek: player.Snek,
+  last_snek_ms: Int,
+  radius: Int,
+  size: Int,
+  offset: Pos,
+) -> element.Element(a) {
+  let color = case time.late(last_snek_ms) {
+    True -> "red"
+    False -> "orange"
+  }
+  let half_size = size / 2
+  svg.g(
+    [attr_str("fill", color), attr("stroke-width", 0)],
+    player.input_positions(snek)
+      |> list.map(fn(pos) {
+        svg.circle([
+          attr("cx", { pos.x * size } + half_size + offset.x),
+          attr("cy", { pos.y * size } + half_size + offset.y),
+          attr("r", radius),
+        ])
+      }),
   )
 }
 
@@ -899,6 +963,7 @@ fn draw_exit(
 fn draw_menu_bar(
   exit: board.Exit,
   run: Run,
+  last_tick_ms: Int,
   w: Int,
   _h: Int,
   size: Int,
@@ -964,6 +1029,18 @@ fn draw_menu_bar(
           )
         }
       },
+      svg.text(
+        [
+          attr("x", 500),
+          attr("y", size - 12),
+          attr_str("class", "share-tech-mono-regular"),
+          attr_str("class", "pause-text"),
+        ],
+        "ms:"
+          <> int.to_string(time.get() - last_tick_ms)
+          <> " "
+          <> bool.to_string(time.late(last_tick_ms)),
+      ),
     ]),
   ]
 }

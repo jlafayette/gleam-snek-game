@@ -2,6 +2,7 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option}
 import gleam/set.{type Set}
+
 import position.{type Move, type Pos, Pos}
 
 pub type Snek {
@@ -9,7 +10,7 @@ pub type Snek {
 }
 
 pub fn init(p: Pos, dir: Move) -> Snek {
-  Snek(body: [p, p, p], input: None, dir: dir, food: 0)
+  Snek(body: [p, p, p], input: InputNone, dir: dir, food: 0)
 }
 
 pub fn head(snek: Snek) -> Pos {
@@ -53,14 +54,14 @@ pub type Result {
   Result(snek: Snek, died: Bool, exit: Bool, ate: Bool)
 }
 
-pub fn move(
-  snek: Snek,
-  food: Set(Pos),
-  walls: List(Pos),
-  exit_pos: Option(Pos),
-  w: Int,
-  h: Int,
-) -> Result {
+pub fn move(args: MoveArgs) -> Result {
+  let snek = args.snek
+  let food = args.food
+  let walls = args.walls
+  let exit_pos = args.exit_pos
+  let w = args.w
+  let h = args.h
+
   let #(head, new_input, mv_taken) = new_head(snek)
   let ate = set.contains(food, head)
   let new_snek = update(snek, head, mv_taken, ate)
@@ -124,49 +125,159 @@ fn check_out_of_boards(head: Pos, w: Int, h: Int) -> Bool {
 }
 
 pub type Input {
-  None
-  One(Move)
-  Future(Move)
-  Double(Move, Move)
+  InputNone
+  Input(Move)
+  InputLate(Move, Move)
 }
 
-pub fn keypress(snek: Snek, move: Move) -> Snek {
-  let new = case snek.input {
-    None -> One(move)
-    One(prev_mv) -> Double(prev_mv, move)
-    Future(mv) -> Double(mv, move)
-    Double(_mv1, mv2) -> Double(mv2, move)
+pub type MoveArgs {
+  MoveArgs(
+    snek: Snek,
+    food: Set(Pos),
+    walls: List(Pos),
+    exit_pos: Option(Pos),
+    w: Int,
+    h: Int,
+  )
+}
+
+type SimResult {
+  SimResult(is_dead: Bool)
+}
+
+fn r_simulate_moves(
+  acc: SimResult,
+  moves: List(Move),
+  args: MoveArgs,
+) -> SimResult {
+  case acc.is_dead {
+    True -> acc
+    False ->
+      case moves {
+        [] -> acc
+        [mv, ..rest] -> {
+          let result =
+            move(MoveArgs(..args, snek: Snek(..args.snek, input: Input(mv))))
+          case result.died {
+            True -> SimResult(is_dead: True)
+            False ->
+              case result.exit {
+                True -> SimResult(is_dead: False)
+                False -> {
+                  let new_args = MoveArgs(..args, snek: result.snek)
+                  r_simulate_moves(acc, rest, new_args)
+                }
+              }
+          }
+        }
+      }
+  }
+}
+
+fn simulate_moves(moves: List(Move), args: MoveArgs) -> SimResult {
+  r_simulate_moves(SimResult(is_dead: False), moves, args)
+}
+
+fn unsafe_moves_to_input(moves: List(Move)) -> Input {
+  case moves {
+    [mv1, mv2] -> InputLate(mv1, mv2)
+    [mv] -> Input(mv)
+    _ -> panic as "Expected list of one or two moves"
+  }
+}
+
+pub fn keypress(move: Move, late: Bool, args: MoveArgs) -> Snek {
+  let snek = args.snek
+  // simulate what would happen exactly
+  // for 1 or 2 moves in the future and accept and reject
+  // keyboard input based on if these moves would lead to death
+  // the goal is to give a little lee-way in input timing at the
+  // end of a tick (late=True)
+
+  let new = case late {
+    True -> {
+      // If late=True we need to simulate the result of making the
+      // new input now, vs doing the current input and then the new
+      // late input on the next move
+      // Even if there is no current input, we assume first move
+      // as going straight for the 2 move scenario
+      // If the 2 input scenario would end in death, then evaluate
+      // using the new late input as the current input
+      // If that wouldn't end in death, or if both end in death, then
+      // ? go with the 1 input scenario since that feels more direct and
+      // 'in-control' for the player
+
+      let two_moves = case snek.input {
+        InputNone -> [snek.dir, move]
+        Input(mv) -> [mv, move]
+        // note, we could simulate both cases here
+        InputLate(mv, _mv2) -> [mv, move]
+      }
+      let two_result = simulate_moves(two_moves, args)
+      let one_result = simulate_moves([move], args)
+      let no_result = simulate_moves([snek.dir], args)
+
+      let moves_to_use = case
+        one_result.is_dead,
+        two_result.is_dead,
+        no_result.is_dead
+      {
+        False, False, _ -> two_moves
+        True, False, _ -> two_moves
+        False, True, _ -> [move]
+        True, True, False -> [snek.dir]
+        True, True, True -> [move]
+      }
+      unsafe_moves_to_input(moves_to_use)
+    }
+    False -> {
+      // If late=False, nothing complicated needs to happen, just
+      // accept the input if it does not collide into neck
+      // this allows the player to run in the wall etc... otherwise it
+      // feels like they are not in control
+
+      let accepted = Input(move)
+      let rejected = snek.input
+      let neck_collide = position.move(head(snek), move) == neck(snek)
+      case neck_collide {
+        True -> rejected
+        False -> accepted
+      }
+    }
   }
   Snek(..snek, input: new)
 }
 
 fn new_head(snek: Snek) -> #(Pos, Input, Move) {
-  case snek.input {
-    None -> {
-      #(position.move(head(snek), snek.dir), snek.input, snek.dir)
-    }
-    One(mv) -> {
-      let head1 = position.move(head(snek), mv)
-      case neck(snek) == head1 {
-        True -> #(position.move(head(snek), snek.dir), None, snek.dir)
-        False -> #(head1, None, mv)
-      }
-    }
-    Future(mv) -> {
-      let head1 = position.move(head(snek), mv)
-      case neck(snek) == head1 {
-        True -> #(position.move(head(snek), snek.dir), None, snek.dir)
-        False -> #(head1, None, mv)
-      }
-    }
-    Double(mv1, mv2) -> {
-      let head1 = position.move(head(snek), mv2)
-      case neck(snek) == head1 {
-        True -> #(position.move(head(snek), mv1), Future(mv2), mv1)
-        False -> #(head1, None, mv2)
-      }
-    }
+  let #(dir, new_input) = case snek.input {
+    InputNone -> #(snek.dir, InputNone)
+    Input(mv) -> #(mv, InputNone)
+    InputLate(mv1, mv2) -> #(mv1, Input(mv2))
   }
+  #(position.move(head(snek), dir), new_input, dir)
+}
+
+fn input_positions_recursive(
+  acc: List(Pos),
+  pos: Pos,
+  dirs: List(Move),
+) -> List(Pos) {
+  case dirs {
+    [d, ..rest] -> {
+      let new_pos = position.move(pos, d)
+      input_positions_recursive([new_pos, ..acc], new_pos, rest)
+    }
+    [] -> acc
+  }
+}
+
+pub fn input_positions(snek: Snek) -> List(Pos) {
+  let dirs = case snek.input {
+    InputNone -> [snek.dir]
+    Input(mv) -> [mv]
+    InputLate(mv1, mv2) -> [mv1, mv2]
+  }
+  input_positions_recursive([], head(snek), dirs)
 }
 
 fn update(snek: Snek, new_head: Pos, move: Move, ate: Bool) -> Snek {

@@ -13,12 +13,6 @@ gleam run -m lustre/dev start
 
 - Food
   - Add food spawn sound maybe (bubble pop kind of sound)
-  - Adjust spawns so that a certain number of food on board is prioritized
-    (otherwise best strategy is to wait around for a long time eating nothing
-     before the exit opens to let food build up)
-  - Retry spawning in late game when most of the board is snek body or walls
-    so spawn rate is comparible to earlier.  There should be reward for hanging
-    out at the very end of the game
 
 - Wall spawn
   - Pick random spot along wall (weighted towards edges away from exit)

@@ -127,14 +127,7 @@ pub fn update(board: Board) -> #(Board, player.Result) {
     _, _ -> 0
   }
   // add food
-  let grid =
-    update_food(
-      board.grid,
-      result.snek,
-      result.ate,
-      board.level.w,
-      board.level.h,
-    )
+  let grid = update_food(board, result.snek, result.ate)
   #(
     Board(
       ..board,
@@ -151,8 +144,7 @@ pub fn update(board: Board) -> #(Board, player.Result) {
 pub fn update_exiting(board: Board) -> #(Board, Bool) {
   let exit_info = get_exit_info(board.exit.pos, width, height)
   let #(new_snek, done) = player.move_exiting(board.snek, exit_info.wall)
-  let grid =
-    update_food(board.grid, new_snek, False, board.level.w, board.level.h)
+  let grid = update_food(board, new_snek, False)
   #(
     Board(..board, grid: grid, snek: new_snek, level: board.level)
       |> update_walls,
@@ -215,9 +207,37 @@ fn init_food(g: Grid, w: Int, h: Int) -> Grid {
   }
 }
 
-fn update_food(grid: Grid, snek: Snek, ate: Bool, w: Int, h: Int) -> Grid {
-  let grid = case int.random(5) {
-    0 -> {
+type FoodInfo {
+  FoodInfo(count: Int, goal: Int, free: Int)
+}
+
+fn food_info(b: Board) -> FoodInfo {
+  let count = food(b) |> list.length
+  let goal = case b.exit {
+    Exit(_, _) -> 5
+    ExitTimer(_, _) -> 10
+  }
+  // -1 is for exit
+  let free =
+    { b.level.h * b.level.w }
+    - { b.snek.body |> list.length }
+    - { walls(b) |> list.length }
+    - count
+    - 1
+  FoodInfo(count, goal, free)
+}
+
+// Recursive function to add a food randomly to an empty square
+fn r_add_food(
+  tries_remaining: Int,
+  grid: Grid,
+  snek: Snek,
+  w: Int,
+  h: Int,
+) -> Grid {
+  case tries_remaining <= 0 {
+    True -> grid
+    False -> {
       let p = random_pos(w, h)
       case dict.get(grid, p) {
         Ok(square) ->
@@ -225,16 +245,40 @@ fn update_food(grid: Grid, snek: Snek, ate: Bool, w: Int, h: Int) -> Grid {
             Square(fg: FgEmpty, bg: BgEmpty)
             | Square(fg: FgEmpty, bg: BgWallSpawn(_)) -> {
               case player.body_contains(snek, p) {
-                True -> grid
+                True -> r_add_food(tries_remaining - 1, grid, snek, w, h)
                 False -> dict.insert(grid, p, Square(..square, fg: FgFood))
               }
             }
-            _ -> grid
+            _ -> r_add_food(tries_remaining - 1, grid, snek, w, h)
           }
-        _ -> grid
+        _ -> r_add_food(tries_remaining - 1, grid, snek, w, h)
       }
     }
-    _ -> grid
+  }
+}
+
+// Calcuate if food should be spawned this tick
+fn spawn_food(info: FoodInfo) -> Bool {
+  let diff = int.min(info.free, info.goal - info.count) |> int.clamp(0, 10)
+  case diff {
+    // 0 -> 0%
+    0 -> False
+    n if n < 10 -> int.random(10 - n) == 0
+    // 10+ -> 100%
+    _ -> True
+  }
+}
+
+fn update_food(b: Board, snek: Snek, ate: Bool) -> Grid {
+  let w = b.level.w
+  let h = b.level.h
+  let grid = b.grid
+
+  let info = food_info(b)
+  let tries = 5
+  let grid = case spawn_food(info) {
+    True -> r_add_food(tries, grid, snek, w, h)
+    False -> b.grid
   }
   // delete newly eaten food
   case ate {

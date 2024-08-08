@@ -12,29 +12,29 @@ gleam run -m lustre/dev start
 ## TODO Ideas
 
 - Food
-  - Add food spawn sound maybe (bubble pop kind of sound)
+  - * Add food spawn sound maybe (bubble pop kind of sound)
 
 - Wall spawn
   - Pick random spot along wall (weighted towards edges away from exit)
-  - Spawn based on distance (accounting for walls)
-  - Play warning sound with new spawn point goes visible
-  - Play sound when wall spawns (thunk + rocks rattle)
-  - Add ticking clock sound or something that indicates the incoming walls.
+  - Spawn based on distance from exit (accounting for walls)
+  - * Play warning sound with new spawn point goes visible
+  - * Play sound when wall spawns (thunk + rocks rattle)
+  - * Add ticking clock sound or something that indicates the incoming walls.
     Play this after the exit opens but slightly before the first walls spawn.
     Maybe right when the first numbers appear and start ticking down.
-  - Maybe play alarm sound for spawning to stress players out more
 
 - Add more levels (at least 10)
 
-- Win screen
+- * Win screen
+- You Died screen should be different than GameOver/Restart screen
 - High score screen
 - Tutorial
 - Logging
 - Better snake graphics (simple head/tail)
 
 - Minor adjustments
-  - Don't block the board entirely with Died/GameOver screen, players
-    need to see how they died
+  - Don't show level score in parenthesis, just main score and it can go down
+    on death (maybe keep a debug flag to show this)
 
 - Player stats at game-end screen (requires server and DB)
 

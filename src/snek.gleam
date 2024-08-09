@@ -946,7 +946,7 @@ fn draw_exit(
           attr_str("opacity", "0.2"),
           ..bbox_to_attrs(exit_bbox, offset)
         ])
-          |> ZElem(infront, _),
+          |> ZElem(behind, _),
         svg.rect([
           attr_str("fill", color.background()),
           attr_str("stroke", color.grid_border()),
@@ -999,20 +999,17 @@ fn draw_menu_bar(
     svg.g([attr_str("fill", "white")], [
       svg.text(
         [
-          attr("x", 8),
+          attr("x", 12),
           attr("y", size - 12),
           attr_str("class", "share-tech-mono-regular"),
           attr_str("class", "pause-text"),
         ],
-        "score:"
-          <> int.to_string(run.score + run.level_score)
-          <> "("
-          <> int.to_string(run.level_score)
-          <> ")",
+        "score:" <> int.to_string(run.score + run.level_score),
+        // <> "(" <> int.to_string(run.level_score) <> ")",
       ),
       svg.text(
         [
-          attr("x", 135),
+          attr("x", 110),
           attr("y", size - 12),
           attr_str("class", "share-tech-mono-regular"),
           attr_str("class", "pause-text"),
@@ -1023,7 +1020,7 @@ fn draw_menu_bar(
         board.Exit(_, to_unlock) -> {
           svg.text(
             [
-              attr("x", 240),
+              attr("x", 210),
               attr("y", size - 12),
               attr_str("class", "share-tech-mono-regular"),
               attr_str("class", "pause-text"),

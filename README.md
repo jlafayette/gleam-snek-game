@@ -25,16 +25,12 @@ gleam run -m lustre/dev start
 
 - Add more levels (at least 10)
 
-- * Win screen
+- Win screen
 - You Died screen should be different than GameOver/Restart screen
 - High score screen
 - Tutorial
 - Logging
 - Better snake graphics (simple head/tail)
-
-- Minor adjustments
-  - Don't show level score in parenthesis, just main score and it can go down
-    on death (maybe keep a debug flag to show this)
 
 - Player stats at game-end screen (requires server and DB)
 

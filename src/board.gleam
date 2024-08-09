@@ -246,7 +246,10 @@ fn r_add_food(
             | Square(fg: FgEmpty, bg: BgWallSpawn(_)) -> {
               case player.body_contains(snek, p) {
                 True -> r_add_food(tries_remaining - 1, grid, snek, w, h)
-                False -> dict.insert(grid, p, Square(..square, fg: FgFood))
+                False -> {
+                  sound.play(sound.FoodSpawn)
+                  dict.insert(grid, p, Square(..square, fg: FgFood))
+                }
               }
             }
             _ -> r_add_food(tries_remaining - 1, grid, snek, w, h)

@@ -453,8 +453,8 @@ fn spawn_walls(g: Grid, snek: Snek) -> Grid {
 }
 
 fn time_to_escape(lvl: Level) -> Int {
-  // lvl.w + lvl.h
-  0
+  // Could do something based on head distance-to-exit
+  lvl.h
 }
 
 pub type Orientation {

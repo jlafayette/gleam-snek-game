@@ -3,7 +3,7 @@ import gleam/int
 
 pub const tick_speed = 250
 
-const late_fraction = 0.7
+const late_fraction = 0.6
 
 @external(javascript, "./time_ffi.mjs", "getTime")
 pub fn get() -> Int

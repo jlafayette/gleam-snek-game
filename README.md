@@ -12,6 +12,23 @@ gleam run -m lustre/dev start
 ## TODO Ideas
 
 - Deploy to github pages
+- Add more levels (at least 10)
+- Win screen
+- High score screen
+- You Died screen should be different than GameOver/Restart screen
+- Logging
+- Player stats at game-end screen (requires server and DB)
+
+- Sound
+  - Add pan based on x position
+
+- Player Control
+  - When tick happens and player would die, launch a new tick event with small
+    grace-period delay so the player has a chance to save it
+    (to do this, don't use interval for ticks, have the next tick spawned at the
+     end of the tick update)
+
+- Tutorial
 
 - Wall spawn
   - Pick random spot along wall (weighted towards edges away from exit)
@@ -19,19 +36,6 @@ gleam run -m lustre/dev start
   - Add ticking clock sound or something that indicates the incoming walls.
     Play this after the exit opens but slightly before the first walls spawn.
     Maybe right when the first numbers appear and start ticking down.
-
-- Sound
-  - Add pan based on x position
-
-- Add more levels (at least 10)
-
-- Win screen
-- You Died screen should be different than GameOver/Restart screen
-- High score screen
-- Tutorial
-- Logging
-
-- Player stats at game-end screen (requires server and DB)
 
 Expansion
 - Better snake graphics (simple head/tail)

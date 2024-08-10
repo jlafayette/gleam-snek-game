@@ -9,6 +9,12 @@ gleam shell # Run an Erlang shell
 gleam run -m lustre/dev start
 ```
 
+## Build
+
+```sh
+gleam run -m lustre/dev build app
+```
+
 ## TODO Ideas
 
 - Deploy to github pages

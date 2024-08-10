@@ -1,6 +1,5 @@
 import gleam/float
 import gleam/int
-import gleam/io
 import gleam/list
 import lustre
 import lustre/attribute.{type Attribute as Attr}
@@ -20,12 +19,10 @@ import time
 // --- Main 
 
 pub fn main() {
-  io.println("Hello from snek!")
   let app = lustre.application(init, update, view)
   let assert Ok(send_to_runtime) = lustre.start(app, "#app", Nil)
   document_add_event_listener("keydown", fn(event) {
     event_code(event)
-    |> io.debug
     |> Keydown
     |> lustre.dispatch
     |> send_to_runtime
@@ -213,21 +210,17 @@ fn update_play(
       }
     }
     Tick -> {
-      io.debug("tick")
       sound.play(sound.Move)
       update_tick(model)
     }
     TickSkip -> {
-      io.debug("tick-skip")
       let _ = window_clear_interval()
       #(model, f_every(time.tick_speed, Tick))
     }
     TickStart(ms) -> {
-      io.debug("tick-start")
       #(model, every(ms, Tick))
     }
     TickStop -> {
-      io.debug("tick-stop")
       let _ = window_clear_interval()
       #(model, effect.none())
     }
@@ -240,7 +233,6 @@ fn update_exiting(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       #(Model(..model, keydown: str), effect.none())
     }
     Tick -> {
-      io.debug("tick")
       sound.play(sound.Move)
       update_tick_exiting(model)
     }
@@ -248,11 +240,9 @@ fn update_exiting(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
       #(model, effect.none())
     }
     TickStart(ms) -> {
-      io.debug("tick-start")
       #(model, every(ms, Tick))
     }
     TickStop -> {
-      io.debug("tick-stop")
       let _ = window_clear_interval()
       #(model, effect.none())
     }
@@ -713,30 +703,30 @@ fn draw_snek(snek: player.Snek, snek_width: Int, size: Int, offset: Pos) {
   )
 }
 
-fn draw_snek_input(
-  snek: player.Snek,
-  last_snek_ms: Int,
-  radius: Int,
-  size: Int,
-  offset: Pos,
-) -> element.Element(a) {
-  let color = case time.late(last_snek_ms) {
-    True -> "red"
-    False -> "orange"
-  }
-  let half_size = size / 2
-  svg.g(
-    [attr_str("fill", color), attr("stroke-width", 0)],
-    player.input_positions(snek)
-      |> list.map(fn(pos) {
-        svg.circle([
-          attr("cx", { pos.x * size } + half_size + offset.x),
-          attr("cy", { pos.y * size } + half_size + offset.y),
-          attr("r", radius),
-        ])
-      }),
-  )
-}
+// fn draw_snek_input(
+//   snek: player.Snek,
+//   last_snek_ms: Int,
+//   radius: Int,
+//   size: Int,
+//   offset: Pos,
+// ) -> element.Element(a) {
+//   let color = case time.late(last_snek_ms) {
+//     True -> "red"
+//     False -> "orange"
+//   }
+//   let half_size = size / 2
+//   svg.g(
+//     [attr_str("fill", color), attr("stroke-width", 0)],
+//     player.input_positions(snek)
+//       |> list.map(fn(pos) {
+//         svg.circle([
+//           attr("cx", { pos.x * size } + half_size + offset.x),
+//           attr("cy", { pos.y * size } + half_size + offset.y),
+//           attr("r", radius),
+//         ])
+//       }),
+//   )
+// }
 
 fn snek_to_points(snek: List(Pos), size: Int, offset: Pos) -> String {
   let half_size = size / 2

@@ -11,9 +11,6 @@ gleam run -m lustre/dev start
 
 ## TODO Ideas
 
-- Food
-  - * Add food spawn sound maybe (bubble pop kind of sound)
-
 - Wall spawn
   - Pick random spot along wall (weighted towards edges away from exit)
   - Spawn based on distance from exit (accounting for walls)

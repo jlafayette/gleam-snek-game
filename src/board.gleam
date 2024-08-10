@@ -65,7 +65,7 @@ fn all_pos(w: Int, h: Int) -> List(Pos) {
 
 type BgSquare {
   BgExit
-  BgWallSpawn(Int)
+  BgWallSpawn(delay: Int, orig: Bool)
   BgEmpty
 }
 
@@ -156,6 +156,14 @@ pub const wall_spawn_min = 10
 
 pub const wall_spawn_max = 16
 
+pub fn wall_spawn_visible(delay: Int) -> Bool {
+  delay <= 9
+}
+
+fn wall_spawn_newly_visible(new_delay: Int) -> Bool {
+  new_delay == 9
+}
+
 fn init_wall_spawns(g: Grid, spawns: List(Pos)) -> Grid {
   let spawn_lookup =
     spawns
@@ -172,7 +180,7 @@ fn init_wall_spawns(g: Grid, spawns: List(Pos)) -> Grid {
   g
   |> dict.map_values(fn(p, square) {
     case dict.get(spawn_lookup, p) {
-      Ok(delay) -> Square(..square, bg: BgWallSpawn(delay))
+      Ok(delay) -> Square(..square, bg: BgWallSpawn(delay, True))
       Error(_) -> square
     }
   })
@@ -193,7 +201,7 @@ fn init_food(g: Grid, w: Int, h: Int) -> Grid {
     Ok(square) ->
       case square {
         Square(fg: FgEmpty, bg: BgEmpty)
-        | Square(fg: FgEmpty, bg: BgWallSpawn(_)) ->
+        | Square(fg: FgEmpty, bg: BgWallSpawn(_, _)) ->
           dict.insert(g, f, Square(..square, fg: FgFood))
         _ -> init_food(g, w, h)
       }
@@ -243,7 +251,7 @@ fn r_add_food(
         Ok(square) ->
           case square {
             Square(fg: FgEmpty, bg: BgEmpty)
-            | Square(fg: FgEmpty, bg: BgWallSpawn(_)) -> {
+            | Square(fg: FgEmpty, bg: BgWallSpawn(_, _)) -> {
               case player.body_contains(snek, p) {
                 True -> r_add_food(tries_remaining - 1, grid, snek, w, h)
                 False -> {
@@ -353,10 +361,10 @@ fn update_walls(b: Board) -> Board {
         |> dict.to_list
         |> list.filter(fn(kv) {
           case kv.1 {
-            Square(fg: FgEmpty, bg: BgWallSpawn(delay)) -> {
+            Square(fg: FgEmpty, bg: BgWallSpawn(delay, _)) -> {
               delay <= 0
             }
-            Square(fg: FgFood, bg: BgWallSpawn(delay)) -> {
+            Square(fg: FgFood, bg: BgWallSpawn(delay, _)) -> {
               delay <= 0
             }
             _ -> False
@@ -377,7 +385,7 @@ fn update_walls(b: Board) -> Board {
           // filter out snake body
           |> list.filter(fn(pos) { !player.body_contains(b.snek, pos) })
           |> list.map(fn(pos) {
-            #(pos, Square(..square, bg: BgWallSpawn(spawn_init_delay())))
+            #(pos, Square(..square, bg: BgWallSpawn(spawn_init_delay(), False)))
           })
         })
         |> list.flatten
@@ -408,10 +416,17 @@ fn spawn_init_delay() -> Int {
 fn tick_down_wall_spawns(g: Grid, snek: Snek) -> Grid {
   dict.map_values(g, fn(pos, square) {
     case square {
-      Square(fg: _, bg: BgWallSpawn(delay)) -> {
+      Square(fg: _, bg: BgWallSpawn(delay, orig)) -> {
         case player.body_contains(snek, pos) {
           True -> square
-          False -> Square(..square, bg: BgWallSpawn(delay - 1))
+          False -> {
+            let new_delay = int.max(0, delay - 1)
+            case wall_spawn_newly_visible(new_delay) && orig {
+              True -> sound.play(sound.BaDum)
+              False -> Nil
+            }
+            Square(..square, bg: BgWallSpawn(new_delay, orig))
+          }
         }
       }
       _ -> square
@@ -422,10 +437,13 @@ fn tick_down_wall_spawns(g: Grid, snek: Snek) -> Grid {
 fn spawn_walls(g: Grid, snek: Snek) -> Grid {
   dict.map_values(g, fn(pos, square) {
     case square {
-      Square(fg: FgEmpty, bg: BgWallSpawn(delay))
-      | Square(fg: FgFood, bg: BgWallSpawn(delay)) -> {
+      Square(fg: FgEmpty, bg: BgWallSpawn(delay, orig))
+      | Square(fg: FgFood, bg: BgWallSpawn(delay, orig)) -> {
         case delay <= 0 && !player.body_contains(snek, pos) {
-          True -> Square(fg: FgWall, bg: BgWallSpawn(0))
+          True -> {
+            sound.play(sound.WallSpawn)
+            Square(fg: FgWall, bg: BgWallSpawn(0, orig))
+          }
           False -> square
         }
       }
@@ -435,7 +453,8 @@ fn spawn_walls(g: Grid, snek: Snek) -> Grid {
 }
 
 fn time_to_escape(lvl: Level) -> Int {
-  lvl.w + lvl.h
+  // lvl.w + lvl.h
+  0
 }
 
 pub type Orientation {
@@ -480,17 +499,17 @@ pub fn get_wall_spawns(b: Board) -> List(WallSpawnInfo) {
   dict.to_list(b.grid)
   |> list.filter(fn(kv) {
     case kv.1 {
-      Square(fg: _, bg: BgWallSpawn(_)) -> True
+      Square(fg: _, bg: BgWallSpawn(_, _)) -> True
       _ -> False
     }
   })
   |> list.map(fn(kv) {
     case kv.1 {
-      Square(fg: FgFood, bg: BgWallSpawn(delay)) ->
+      Square(fg: FgFood, bg: BgWallSpawn(delay, _orig)) ->
         WallSpawnInfo(kv.0, delay, True, False)
-      Square(fg: FgWall, bg: BgWallSpawn(delay)) ->
+      Square(fg: FgWall, bg: BgWallSpawn(delay, _orig)) ->
         WallSpawnInfo(kv.0, delay, False, True)
-      Square(fg: _, bg: BgWallSpawn(delay)) ->
+      Square(fg: _, bg: BgWallSpawn(delay, _orig)) ->
         WallSpawnInfo(kv.0, delay, False, False)
       _ -> WallSpawnInfo(kv.0, 0, False, False)
     }

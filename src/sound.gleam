@@ -10,6 +10,8 @@ pub type Sound {
   Move
   DoorOpen
   FoodSpawn
+  BaDum
+  WallSpawn
 }
 
 @external(javascript, "./sound_ffi.mjs", "playSound")
@@ -36,6 +38,8 @@ pub fn lookup(sound: Sound) -> String {
     Move -> "move2.mp3"
     DoorOpen -> "door_open.mp3"
     FoodSpawn -> "food_spawn.mp3"
+    BaDum -> "ba_dum.mp3"
+    WallSpawn -> "wall_spawn.mp3"
   }
 }
 
@@ -52,6 +56,8 @@ pub fn lookup_rate(sound: Sound) -> Float {
     LevelFinished -> 1.7
     DoorOpen -> 2.0
     FoodSpawn -> random(1.25, 1.55)
+    BaDum -> 1.0
+    WallSpawn -> random(0.9, 1.1)
     _ -> random(0.95, 1.05)
   }
 }
@@ -61,6 +67,8 @@ pub fn lookup_gain(sound: Sound) -> Float {
     Move -> 0.2
     HitWall -> 0.8
     FoodSpawn -> random(0.85, 0.9)
+    BaDum -> 0.4
+    WallSpawn -> random(0.7, 0.8)
     _ -> random(0.95, 1.05)
   }
 }

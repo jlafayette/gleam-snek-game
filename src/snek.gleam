@@ -843,7 +843,7 @@ fn draw_wall_spawns(
     {
       wall_spawns
       |> list.filter(fn(info) {
-        !info.has_wall && info.delay < board.wall_spawn_min
+        !info.has_wall && board.wall_spawn_visible(info.delay)
       })
       |> list.map(fn(info) {
         let #(text_color, outline_color, outline_opacity) = case info.has_food {

@@ -76,75 +76,6 @@ var NonEmpty = class extends List {
     this.tail = tail;
   }
 };
-var BitArray = class _BitArray {
-  constructor(buffer) {
-    if (!(buffer instanceof Uint8Array)) {
-      throw "BitArray can only be constructed from a Uint8Array";
-    }
-    this.buffer = buffer;
-  }
-  // @internal
-  get length() {
-    return this.buffer.length;
-  }
-  // @internal
-  byteAt(index2) {
-    return this.buffer[index2];
-  }
-  // @internal
-  floatFromSlice(start4, end, isBigEndian) {
-    return byteArrayToFloat(this.buffer, start4, end, isBigEndian);
-  }
-  // @internal
-  intFromSlice(start4, end, isBigEndian, isSigned) {
-    return byteArrayToInt(this.buffer, start4, end, isBigEndian, isSigned);
-  }
-  // @internal
-  binaryFromSlice(start4, end) {
-    return new _BitArray(this.buffer.slice(start4, end));
-  }
-  // @internal
-  sliceAfter(index2) {
-    return new _BitArray(this.buffer.slice(index2));
-  }
-};
-var UtfCodepoint = class {
-  constructor(value) {
-    this.value = value;
-  }
-};
-function byteArrayToInt(byteArray, start4, end, isBigEndian, isSigned) {
-  let value = 0;
-  if (isBigEndian) {
-    for (let i = start4; i < end; i++) {
-      value = value * 256 + byteArray[i];
-    }
-  } else {
-    for (let i = end - 1; i >= start4; i--) {
-      value = value * 256 + byteArray[i];
-    }
-  }
-  if (isSigned) {
-    const byteSize = end - start4;
-    const highBit = 2 ** (byteSize * 8 - 1);
-    if (value >= highBit) {
-      value -= highBit * 2;
-    }
-  }
-  return value;
-}
-function byteArrayToFloat(byteArray, start4, end, isBigEndian) {
-  const view2 = new DataView(byteArray.buffer);
-  const byteSize = end - start4;
-  if (byteSize === 8) {
-    return view2.getFloat64(start4, !isBigEndian);
-  } else if (byteSize === 4) {
-    return view2.getFloat32(start4, !isBigEndian);
-  } else {
-    const msg = `Sized floats must be 32-bit or 64-bit on JavaScript, got size of ${byteSize * 8} bits`;
-    throw new globalThis.Error(msg);
-  }
-}
 var Result = class _Result extends CustomType {
   // @internal
   static isResult(data) {
@@ -1739,18 +1670,6 @@ function graphemes_iterator(string2) {
 function split(xs, pattern2) {
   return List.fromArray(xs.split(pattern2));
 }
-function console_log(term) {
-  console.log(term);
-}
-function print_debug(string2) {
-  if (typeof process === "object" && process.stderr?.write) {
-    process.stderr.write(string2 + "\n");
-  } else if (typeof Deno === "object") {
-    Deno.stderr.writeSync(new TextEncoder().encode(string2 + "\n"));
-  } else {
-    console.log(string2);
-  }
-}
 function floor2(float2) {
   return Math.floor(float2);
 }
@@ -1779,83 +1698,6 @@ function map_get(map5, key) {
 }
 function map_insert(key, value, map5) {
   return map5.set(key, value);
-}
-function inspect(v) {
-  const t = typeof v;
-  if (v === true)
-    return "True";
-  if (v === false)
-    return "False";
-  if (v === null)
-    return "//js(null)";
-  if (v === void 0)
-    return "Nil";
-  if (t === "string")
-    return JSON.stringify(v);
-  if (t === "bigint" || t === "number")
-    return v.toString();
-  if (Array.isArray(v))
-    return `#(${v.map(inspect).join(", ")})`;
-  if (v instanceof List)
-    return inspectList(v);
-  if (v instanceof UtfCodepoint)
-    return inspectUtfCodepoint(v);
-  if (v instanceof BitArray)
-    return inspectBitArray(v);
-  if (v instanceof CustomType)
-    return inspectCustomType(v);
-  if (v instanceof Dict)
-    return inspectDict(v);
-  if (v instanceof Set)
-    return `//js(Set(${[...v].map(inspect).join(", ")}))`;
-  if (v instanceof RegExp)
-    return `//js(${v})`;
-  if (v instanceof Date)
-    return `//js(Date("${v.toISOString()}"))`;
-  if (v instanceof Function) {
-    const args = [];
-    for (const i of Array(v.length).keys())
-      args.push(String.fromCharCode(i + 97));
-    return `//fn(${args.join(", ")}) { ... }`;
-  }
-  return inspectObject(v);
-}
-function inspectDict(map5) {
-  let body = "dict.from_list([";
-  let first = true;
-  map5.forEach((value, key) => {
-    if (!first)
-      body = body + ", ";
-    body = body + "#(" + inspect(key) + ", " + inspect(value) + ")";
-    first = false;
-  });
-  return body + "])";
-}
-function inspectObject(v) {
-  const name = Object.getPrototypeOf(v)?.constructor?.name || "Object";
-  const props = [];
-  for (const k of Object.keys(v)) {
-    props.push(`${inspect(k)}: ${inspect(v[k])}`);
-  }
-  const body = props.length ? " " + props.join(", ") + " " : "";
-  const head2 = name === "Object" ? "" : name + " ";
-  return `//js(${head2}{${body}})`;
-}
-function inspectCustomType(record) {
-  const props = Object.keys(record).map((label) => {
-    const value = inspect(record[label]);
-    return isNaN(parseInt(label)) ? `${label}: ${value}` : value;
-  }).join(", ");
-  return props ? `${record.constructor.name}(${props})` : record.constructor.name;
-}
-function inspectList(list) {
-  return `[${list.toArray().map(inspect).join(", ")}]`;
-}
-function inspectBitArray(bits) {
-  return `<<${Array.from(bits.buffer).join(", ")}>>`;
-}
-function inspectUtfCodepoint(codepoint2) {
-  return `//utfcodepoint(${String.fromCodePoint(codepoint2.value)})`;
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/float.mjs
@@ -1903,21 +1745,6 @@ function split3(x, substring) {
     let _pipe$2 = split2(_pipe$1, substring);
     return map(_pipe$2, to_string3);
   }
-}
-function inspect2(term) {
-  let _pipe = inspect(term);
-  return to_string3(_pipe);
-}
-
-// build/dev/javascript/gleam_stdlib/gleam/io.mjs
-function println(string2) {
-  return console_log(string2);
-}
-function debug(term) {
-  let _pipe = term;
-  let _pipe$1 = inspect2(_pipe);
-  print_debug(_pipe$1);
-  return term;
 }
 
 // build/dev/javascript/gleam_stdlib/gleam/bool.mjs
@@ -4337,17 +4164,14 @@ function update_exiting2(model, msg) {
     let str = msg[0];
     return [model.withFields({ keydown: str }), none()];
   } else if (msg instanceof Tick) {
-    debug("tick");
     playSound(new Move());
     return update_tick_exiting(model);
   } else if (msg instanceof TickSkip) {
     return [model, none()];
   } else if (msg instanceof TickStart) {
     let ms = msg[0];
-    debug("tick-start");
     return [model, every(ms, new Tick())];
   } else {
-    debug("tick-stop");
     let $ = windowClearInterval();
     return [model, none()];
   }
@@ -4502,19 +4326,15 @@ function update_play(model, msg, last_tick_ms) {
       ];
     }
   } else if (msg instanceof Tick) {
-    debug("tick");
     playSound(new Move());
     return update_tick(model);
   } else if (msg instanceof TickSkip) {
-    debug("tick-skip");
     let $ = windowClearInterval();
     return [model, f_every(tick_speed, new Tick())];
   } else if (msg instanceof TickStart) {
     let ms = msg[0];
-    debug("tick-start");
     return [model, every(ms, new Tick())];
   } else {
-    debug("tick-stop");
     let $ = windowClearInterval();
     return [model, none()];
   }
@@ -5348,14 +5168,13 @@ function view(model) {
   );
 }
 function main() {
-  println("Hello from snek!");
   let app = application(init4, update4, view);
   let $ = start3(app, "#app", void 0);
   if (!$.isOk()) {
     throw makeError(
       "assignment_no_match",
       "snek",
-      25,
+      23,
       "main",
       "Assignment pattern did not match",
       { value: $ }
@@ -5366,10 +5185,9 @@ function main() {
     "keydown",
     (event) => {
       let _pipe = eventCode(event);
-      let _pipe$1 = debug(_pipe);
-      let _pipe$2 = new Keydown(_pipe$1);
-      let _pipe$3 = dispatch(_pipe$2);
-      return send_to_runtime(_pipe$3);
+      let _pipe$1 = new Keydown(_pipe);
+      let _pipe$2 = dispatch(_pipe$1);
+      return send_to_runtime(_pipe$2);
     }
   );
 }

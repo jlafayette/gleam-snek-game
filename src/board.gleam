@@ -118,6 +118,7 @@ pub fn move_args(b: Board) -> player.MoveArgs {
 }
 
 pub fn update(board: Board) -> #(Board, player.Result) {
+  let exiting = False
   let result = player.move(move_args(board))
   let score_increase = case result.died, result.ate {
     False, True -> {
@@ -136,18 +137,19 @@ pub fn update(board: Board) -> #(Board, player.Result) {
       exit: update_exit(board.exit, board.level, score_increase),
       level: board.level,
     )
-      |> update_walls,
+      |> update_walls(exiting),
     result,
   )
 }
 
 pub fn update_exiting(board: Board) -> #(Board, Bool) {
+  let exiting = True
   let exit_info = get_exit_info(board.exit.pos, width, height)
   let #(new_snek, done) = player.move_exiting(board.snek, exit_info.wall)
   let grid = update_food(board, new_snek, False)
   #(
     Board(..board, grid: grid, snek: new_snek, level: board.level)
-      |> update_walls,
+      |> update_walls(exiting),
     done,
   )
 }
@@ -348,7 +350,7 @@ fn update_exit(exit: Exit, lvl: Level, increase: Int) -> Exit {
   }
 }
 
-fn update_walls(b: Board) -> Board {
+fn update_walls(b: Board, exiting: Bool) -> Board {
   case b.exit {
     ExitTimer(_exit, t) if t < wall_spawn_min -> {
       let w = b.level.w
@@ -401,8 +403,8 @@ fn update_walls(b: Board) -> Board {
             _ -> a
           }
         })
-        |> spawn_walls(b.snek)
-        |> tick_down_wall_spawns(b.snek)
+        |> spawn_walls(b.snek, exiting)
+        |> tick_down_wall_spawns(b.snek, exiting)
       Board(..b, grid: new_grid)
     }
     _ -> b
@@ -413,7 +415,7 @@ fn spawn_init_delay() -> Int {
   int.random(wall_spawn_max - wall_spawn_min) + wall_spawn_min + 1
 }
 
-fn tick_down_wall_spawns(g: Grid, snek: Snek) -> Grid {
+fn tick_down_wall_spawns(g: Grid, snek: Snek, exiting: Bool) -> Grid {
   dict.map_values(g, fn(pos, square) {
     case square {
       Square(fg: _, bg: BgWallSpawn(delay, orig)) -> {
@@ -421,7 +423,7 @@ fn tick_down_wall_spawns(g: Grid, snek: Snek) -> Grid {
           True -> square
           False -> {
             let new_delay = int.max(0, delay - 1)
-            case wall_spawn_newly_visible(new_delay) && orig {
+            case wall_spawn_newly_visible(new_delay) && orig && !exiting {
               True -> sound.play(sound.BaDum)
               False -> Nil
             }
@@ -434,14 +436,17 @@ fn tick_down_wall_spawns(g: Grid, snek: Snek) -> Grid {
   })
 }
 
-fn spawn_walls(g: Grid, snek: Snek) -> Grid {
+fn spawn_walls(g: Grid, snek: Snek, exiting: Bool) -> Grid {
   dict.map_values(g, fn(pos, square) {
     case square {
       Square(fg: FgEmpty, bg: BgWallSpawn(delay, orig))
       | Square(fg: FgFood, bg: BgWallSpawn(delay, orig)) -> {
         case delay <= 0 && !player.body_contains(snek, pos) {
           True -> {
-            sound.play(sound.WallSpawn)
+            case exiting {
+              True -> sound.play(sound.WallSpawnExiting)
+              False -> sound.play(sound.WallSpawn)
+            }
             Square(fg: FgWall, bg: BgWallSpawn(0, orig))
           }
           False -> square

@@ -64,10 +64,11 @@ pub fn lookup_rate(sound: Sound) -> Float {
 
 pub fn lookup_gain(sound: Sound) -> Float {
   case sound {
+    Eat -> random(0.7, 0.8)
     Move -> 0.2
-    HitWall -> 0.8
-    FoodSpawn -> random(0.85, 0.9)
-    BaDum -> 0.4
+    HitWall -> 0.4
+    FoodSpawn -> random(0.95, 1.05)
+    BaDum -> 0.5
     WallSpawn -> random(0.7, 0.8)
     _ -> random(0.95, 1.05)
   }

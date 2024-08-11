@@ -17,8 +17,8 @@ gleam run -m lustre/dev build app
 
 ## TODO Ideas
 
-- Deploy to github pages
-- Add more levels (at least 10)
+- Add a life when completing a level if done without dying
+  (could add a powerup?)
 - Win screen
 - High score screen
 - You Died screen should be different than GameOver/Restart screen
@@ -27,8 +27,15 @@ gleam run -m lustre/dev build app
 
 - Sound
   - Add pan based on x position
+  - Investigate difference in gain on different systems
+    (currently some sounds are too loud on chromebook speakers, but sound almost
+    too quite on windows speakers)
+    Could try equalizing all sound files instead of using gain nodes in audio api
 
 - Player Control
+  - don't skip input, if it would run into a wall during late mode, but next turn
+    it wouldn't,
+    then make sure to carry over
   - When tick happens and player would die, launch a new tick event with small
     grace-period delay so the player has a chance to save it
     (to do this, don't use interval for ticks, have the next tick spawned at the

@@ -3091,6 +3091,8 @@ var BaDum = class extends CustomType {
 };
 var WallSpawn2 = class extends CustomType {
 };
+var WallSpawnExiting = class extends CustomType {
+};
 function random2(lo, hi) {
   let v = random_uniform();
   return lo + v * (hi - lo);
@@ -3108,21 +3110,27 @@ function lookup_rate(sound) {
     return 1;
   } else if (sound instanceof WallSpawn2) {
     return random2(0.9, 1.1);
+  } else if (sound instanceof WallSpawnExiting) {
+    return random2(0.9, 1.1);
   } else {
     return random2(0.95, 1.05);
   }
 }
 function lookup_gain(sound) {
-  if (sound instanceof Move) {
+  if (sound instanceof Eat) {
+    return random2(0.7, 0.8);
+  } else if (sound instanceof Move) {
     return 0.2;
   } else if (sound instanceof HitWall) {
-    return 0.8;
-  } else if (sound instanceof FoodSpawn) {
-    return random2(0.85, 0.9);
-  } else if (sound instanceof BaDum) {
     return 0.4;
+  } else if (sound instanceof FoodSpawn) {
+    return random2(0.95, 1.05);
+  } else if (sound instanceof BaDum) {
+    return 0.5;
   } else if (sound instanceof WallSpawn2) {
     return random2(0.7, 0.8);
+  } else if (sound instanceof WallSpawnExiting) {
+    return random2(0.2, 0.4);
   } else {
     return random2(0.95, 1.05);
   }
@@ -3135,7 +3143,7 @@ function take_first(items) {
     throw makeError(
       "panic",
       "sound",
-      79,
+      82,
       "take_first",
       "needs at least 1 element in list",
       {}
@@ -3171,6 +3179,8 @@ function lookup(sound) {
     return "food_spawn.mp3";
   } else if (sound instanceof BaDum) {
     return "ba_dum.mp3";
+  } else if (sound instanceof WallSpawn2) {
+    return "wall_spawn.mp3";
   } else {
     return "wall_spawn.mp3";
   }
@@ -3369,7 +3379,7 @@ function init_food(loop$g, loop$w, loop$h) {
       throw makeError(
         "panic",
         "board",
-        209,
+        211,
         "init_food",
         "illegal grid does not contain " + to_string2(w) + "x" + to_string2(
           h
@@ -3517,7 +3527,7 @@ function update_food(b, snek2, ate) {
     return grid$1;
   }
 }
-function tick_down_wall_spawns(g2, snek2) {
+function tick_down_wall_spawns(g2, snek2, exiting) {
   return map_values(
     g2,
     (pos, square) => {
@@ -3529,7 +3539,7 @@ function tick_down_wall_spawns(g2, snek2) {
           return square;
         } else {
           let new_delay = max(0, delay - 1);
-          let $1 = wall_spawn_newly_visible(new_delay) && orig;
+          let $1 = wall_spawn_newly_visible(new_delay) && orig && !exiting;
           if ($1) {
             playSound(new BaDum());
           } else {
@@ -3542,7 +3552,7 @@ function tick_down_wall_spawns(g2, snek2) {
     }
   );
 }
-function spawn_walls(g2, snek2) {
+function spawn_walls(g2, snek2, exiting) {
   return map_values(
     g2,
     (pos, square) => {
@@ -3551,7 +3561,11 @@ function spawn_walls(g2, snek2) {
         let orig = square.bg.orig;
         let $ = delay <= 0 && !body_contains(snek2, pos);
         if ($) {
-          playSound(new WallSpawn2());
+          if (exiting) {
+            playSound(new WallSpawnExiting());
+          } else {
+            playSound(new WallSpawn2());
+          }
           return new Square(new BgWallSpawn(0, orig), new FgWall());
         } else {
           return square;
@@ -3561,7 +3575,11 @@ function spawn_walls(g2, snek2) {
         let orig = square.bg.orig;
         let $ = delay <= 0 && !body_contains(snek2, pos);
         if ($) {
-          playSound(new WallSpawn2());
+          if (exiting) {
+            playSound(new WallSpawnExiting());
+          } else {
+            playSound(new WallSpawn2());
+          }
           return new Square(new BgWallSpawn(0, orig), new FgWall());
         } else {
           return square;
@@ -3630,7 +3648,7 @@ function get_exit_info(p2, w, h) {
       throw makeError(
         "panic",
         "board",
-        477,
+        482,
         "get_exit_info",
         "Invalid exit",
         {}
@@ -3764,7 +3782,7 @@ var wall_spawn_max = 16;
 function spawn_init_delay() {
   return random(wall_spawn_max - wall_spawn_min) + wall_spawn_min + 1;
 }
-function update_walls(b) {
+function update_walls(b, exiting) {
   let $ = b.exit;
   if ($ instanceof ExitTimer && $.timer < 10) {
     let t = $.timer;
@@ -3841,8 +3859,8 @@ function update_walls(b) {
           }
         }
       );
-      let _pipe$1 = spawn_walls(_pipe, b.snek);
-      return tick_down_wall_spawns(_pipe$1, b.snek);
+      let _pipe$1 = spawn_walls(_pipe, b.snek, exiting);
+      return tick_down_wall_spawns(_pipe$1, b.snek, exiting);
     })();
     return b.withFields({ grid: new_grid });
   } else {
@@ -3850,6 +3868,7 @@ function update_walls(b) {
   }
 }
 function update3(board) {
+  let exiting = false;
   let result = move2(move_args(board));
   let score_increase = (() => {
     let $ = result.died;
@@ -3870,12 +3889,13 @@ function update3(board) {
         exit: update_exit(board.exit, board.level, score_increase),
         level: board.level
       });
-      return update_walls(_pipe);
+      return update_walls(_pipe, exiting);
     })(),
     result
   ];
 }
 function update_exiting(board) {
+  let exiting = true;
   let exit_info$1 = get_exit_info(board.exit.pos, width2, height2);
   let $ = move_exiting(board.snek, exit_info$1.wall);
   let new_snek = $[0];
@@ -3888,7 +3908,7 @@ function update_exiting(board) {
         snek: new_snek,
         level: board.level
       });
-      return update_walls(_pipe);
+      return update_walls(_pipe, exiting);
     })(),
     done
   ];
